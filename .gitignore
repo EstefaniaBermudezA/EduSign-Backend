@@ -221,9 +221,6 @@ __marimo__/
 # EduSign-Backend — Reglas específicas del proyecto
 # ============================================
 
-# Carpetas de Claude Code (configuración local del agente)
-.claude/
-
 # === Módulo sign_recognition ===
 # Videos de entrenamiento (muy pesados, 195 MB)
 sign_recognition/videos/
