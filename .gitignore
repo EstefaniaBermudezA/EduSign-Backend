@@ -216,3 +216,27 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ============================================
+# EduSign-Backend — Reglas específicas del proyecto
+# ============================================
+
+# Carpetas de Claude Code (configuración local del agente)
+.claude/
+
+# === Módulo sign_recognition ===
+# Videos de entrenamiento (muy pesados, 195 MB)
+sign_recognition/videos/
+
+# Features extraídos (regenerables desde los videos)
+sign_recognition/data/
+
+# Documentación interna del módulo (no se publica)
+sign_recognition/docs/
+
+# Modelos preentrenados de MediaPipe (se descargan aparte)
+sign_recognition/models/*.task
+
+# === Excepciones — sí queremos versionar esto ===
+# El modelo CNN entrenado debe estar en el repo
+!sign_recognition/models/signs_cnn.pth
