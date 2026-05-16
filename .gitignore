@@ -237,3 +237,10 @@ sign_recognition/models/*.task
 # === Excepciones — sí queremos versionar esto ===
 # El modelo CNN entrenado debe estar en el repo
 !sign_recognition/models/signs_cnn.pth
+
+# === Reglas que faltaban ===
+# Carpeta de Claude Code (configuración local del agente)
+.claude/
+
+# Entorno virtual con typo accidental (debería llamarse .venv)
+.ven/

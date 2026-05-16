@@ -19,6 +19,7 @@ EduSign-Backend/
 ├── sign_recognition/              # Módulo de reconocimiento de LSC
 │   ├── src/
 │   │   ├── main.py                # Detección en tiempo real desde webcam
+│   │   ├── sign_server.py         # Servidor WebSocket para integración con UE5
 │   │   ├── train_model.py         # Entrenamiento de la CNN 1D
 │   │   └── extract_features.py    # Extracción de landmarks desde videos
 │   ├── models/
@@ -113,7 +114,7 @@ Editar `.env` y completar el campo `HF_TOKEN` con un token válido de HuggingFac
 
 ## Uso
 
-### Reconocimiento de señas en tiempo real
+### Reconocimiento de señas en tiempo real (modo standalone)
 
 Desde la carpeta `sign_recognition/`, con el entorno virtual activo:
 
@@ -129,6 +130,28 @@ python src/main.py --threshold 0.0004 --camera 0
 
 Controles:
 - `q` o `ESC`: salir de la aplicación.
+
+### Servidor WebSocket (integración con Unreal Engine 5)
+
+Para conectar el reconocimiento de señas con el cliente VR, levantar el servidor WebSocket:
+
+```bash
+python src/sign_server.py
+```
+
+Parámetros opcionales:
+
+```bash
+python src/sign_server.py --host 0.0.0.0 --port 8765 --camera 0
+```
+
+El servidor expone las detecciones en `ws://127.0.0.1:8765` en formato JSON:
+
+```json
+{"label": "quien", "confidence": 0.87, "timestamp": 1712345678.9}
+```
+
+Desde Unreal Engine 5 el cliente se conecta a esta URL para recibir las señas reconocidas en tiempo real.
 
 ### Servicio LLM
 
