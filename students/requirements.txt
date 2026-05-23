@@ -1,0 +1,15 @@
+# Dependencias del módulo `students` de EduSign-Backend
+# Instalar con: pip install -r requirements.txt
+
+# Framework web async
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+
+# Modelos y validación
+pydantic==2.9.2
+
+# Cliente de MongoDB Atlas
+pymongo==4.9.1
+
+# Variables de entorno (.env)
+python-dotenv==1.0.1

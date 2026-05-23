@@ -6,6 +6,24 @@ deteccion a los clientes UE5 conectados, en formato JSON:
 
     {"label": "quien", "confidence": 0.87, "timestamp": 1712345678.9}
 
+Modelo de captura controlada por UE5 (boton "Pregunta"):
+  - Default: captura APAGADA. El worker no procesa frames.
+  - Cuando el nino pulsa el boton, UE5 envia {"action":"start_capture"}.
+    Python enciende la captura.
+  - Python procesa frames y, cuando detecta una sena con suficiente
+    confianza, la envia a UE5 (pero sigue capturando por si la deteccion
+    no fue la que el nino queria).
+  - Cuando UE5 reconoce la sena y arranca la animacion, envia
+    {"action":"animation_started"}. Python apaga la captura
+    automaticamente.
+  - La captura solo vuelve a encenderse cuando el nino pulsa "Pregunta"
+    de nuevo.
+
+Caso de falso positivo (UE5 no tiene animacion para ese label):
+  - UE5 no envia animation_started. Python mantiene la captura encendida
+    y el nino puede intentar la sena de nuevo sin tener que volver a
+    pulsar el boton.
+
 Uso:
     pip install websockets
     python src/sign_server.py
@@ -45,6 +63,11 @@ detection_queue: "asyncio.Queue" = None
 connected_clients = set()
 stop_event = threading.Event()
 
+# Captura controlada por UE5. Default apagada hasta que el nino pulse
+# el boton "Pregunta" y UE5 envie start_capture. Se apaga cuando UE5
+# confirma que una sena fue reconocida (animation_started).
+capture_enabled = threading.Event()
+
 
 def detection_worker(args, loop):
     """Thread que corre el detector y encola cada seña reconocida."""
@@ -65,6 +88,7 @@ def detection_worker(args, loop):
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
     print(f"[Worker] Detector activo. Senas: {list(idx_to_label.values())}")
+    print(f"[Worker] Captura inicialmente APAGADA. Esperando boton 'Pregunta' desde UE5...")
 
     buffer = deque(maxlen=MAX_BUFFER_FRAMES)
     stillness_start = None
@@ -76,6 +100,13 @@ def detection_worker(args, loop):
         if not ret:
             continue
         timestamp_ms += 33
+
+        # Si la captura no esta habilitada, drenamos el buffer para no
+        # acumular movimiento parcial que se procesaria al reactivarse.
+        if not capture_enabled.is_set():
+            buffer.clear()
+            stillness_start = None
+            continue
 
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
@@ -107,7 +138,7 @@ def detection_worker(args, loop):
                             "confidence": float(prob),
                             "timestamp": now,
                         }
-                        print(f"[Worker] Detectado: {label} ({prob:.0%})")
+                        print(f"[Worker] Detectado: {label} ({prob:.0%}). Enviado a UE5. Captura sigue activa hasta animation_started.")
                         asyncio.run_coroutine_threadsafe(
                             detection_queue.put(payload), loop
                         )
@@ -139,9 +170,42 @@ async def handler(websocket):
     print(f"[WS] Cliente conectado: {websocket.remote_address}")
     connected_clients.add(websocket)
     try:
-        await websocket.wait_closed()
+        # Mensajes entrantes desde UE5:
+        #   start_capture     -> enciende la captura (nino pulso "Pregunta")
+        #   animation_started -> apaga la captura (UE5 reconocio la sena)
+        #   stop_capture      -> apaga la captura explicitamente (opcional)
+        async for raw in websocket:
+            try:
+                data = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            action = data.get("action") or data.get("event")
+
+            if action in ("start_capture", "ask"):
+                if not capture_enabled.is_set():
+                    capture_enabled.set()
+                    print("[WS] start_capture recibido. Captura ACTIVA.")
+                else:
+                    print("[WS] start_capture recibido pero captura ya estaba activa.")
+
+            elif action in ("animation_started", "sign_recognized"):
+                if capture_enabled.is_set():
+                    capture_enabled.clear()
+                    print("[WS] animation_started recibido. Captura APAGADA.")
+
+            elif action in ("stop_capture",):
+                if capture_enabled.is_set():
+                    capture_enabled.clear()
+                    print("[WS] stop_capture recibido. Captura APAGADA.")
+    except websockets.ConnectionClosed:
+        pass
     finally:
         connected_clients.discard(websocket)
+        # Si no quedan clientes, apagamos la captura por seguridad para
+        # que no quede procesando frames sin nadie escuchando.
+        if not connected_clients and capture_enabled.is_set():
+            capture_enabled.clear()
+            print("[WS] Sin clientes conectados. Captura APAGADA.")
         print(f"[WS] Cliente desconectado: {websocket.remote_address}")
 
 
