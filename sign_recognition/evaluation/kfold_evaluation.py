@@ -1,17 +1,17 @@
 """
-Validacion cruzada estratificada SIN leakage para el clasificador CNN 1D de senas LSC.
+Validación cruzada estratificada sin leakage para el clasificador CNN 1D de señas LSC.
 
 Diferencias clave frente a evaluate_model.py:
  - El split se hace sobre las 99 muestras CRUDAS (no aumentadas).
- - El data augmentation se aplica SOLO a las muestras de train de cada fold.
- - La normalizacion z-score se calcula SOLO sobre train de cada fold y se aplica a val.
- - Se repite todo con varias semillas para reportar media +/- desviacion estandar.
+ - El data augmentation se aplica solo a las muestras de train de cada fold.
+ - La normalización z-score se calcula solo sobre train de cada fold y se aplica a val.
+ - Se repite todo con varias semillas para reportar media +/- desviación estándar.
 
 Salidas (en evaluation/results/):
  - kfold_per_fold.csv         -> una fila por seed x fold x clase con TP/FP/FN/precision/recall/F1/support
  - kfold_per_fold_global.csv  -> una fila por seed x fold con accuracy y F1 macro
  - kfold_summary.json         -> resumen agregado (media +/- std combinando seeds y folds)
- - kfold_confusion_matrix.png -> matriz de confusion agregada sobre TODOS los folds y seeds
+ - kfold_confusion_matrix.png -> matriz de confusión agregada sobre TODOS los folds y seeds
 
 Uso (desde sign_recognition_eval/):
     python evaluation/kfold_evaluation.py
@@ -31,14 +31,14 @@ from torch.utils.data import DataLoader, TensorDataset
 import matplotlib.pyplot as plt
 
 # ----------------------------------------------------------------------------
-# Reutilizar arquitectura y augmentations del modulo de entrenamiento original
+# Reutilizar arquitectura y augmentations del módulo de entrenamiento original
 # ----------------------------------------------------------------------------
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(THIS_DIR)
 SRC_DIR = os.path.join(PROJECT_ROOT, "src")
 sys.path.insert(0, SRC_DIR)
 
-from train_model import (  # noqa: E402
+from train_model import ( 
     SignCNN,
     normalize_sequence,
     augment_sample,
@@ -50,7 +50,7 @@ from train_model import (  # noqa: E402
 )
 
 # ----------------------------------------------------------------------------
-# Configuracion del experimento
+# Configuración del experimento
 # ----------------------------------------------------------------------------
 N_SPLITS = 5
 SEEDS = [42, 123, 2025]
@@ -108,7 +108,7 @@ def load_raw_dataset(features_root):
 def stratified_kfold_indices(y, n_splits, seed):
     """StratifiedKFold manual (sin dependencia de sklearn).
 
-    Para cada clase: baraja sus indices y los reparte en n_splits cubos
+    Para cada clase: baraja sus índices y los reparte en n_splits cubos
     rotativos. Devuelve un generador de (train_idx, val_idx) por fold.
     """
     rng = np.random.RandomState(seed)
@@ -129,8 +129,8 @@ def stratified_kfold_indices(y, n_splits, seed):
 def prepare_fold_data(raw_X, raw_y, train_idx, val_idx):
     """Construye X_train (aumentado + z-score) y X_val (z-score con stats de train).
 
-    Sin leakage: las copias aumentadas viven solo en train; la media y la desviacion
-    estandar se calculan SOLO sobre las muestras de train de este fold.
+    Sin leakage: las copias aumentadas viven solo en train; la media y la desviación
+    estándar se calculan solo sobre las muestras de train de este fold.
     """
     # --- Train: original + AUGMENTATION_PER_SAMPLE copias aumentadas por muestra ---
     train_seqs = []
@@ -146,12 +146,12 @@ def prepare_fold_data(raw_X, raw_y, train_idx, val_idx):
     X_train = np.array(train_seqs, dtype=np.float32)
     y_train = np.array(train_labels, dtype=np.int64)
 
-    # --- Val: solo normalizacion temporal, sin augmentation ---
+    # --- Val: solo normalización temporal, sin augmentation ---
     val_seqs = [normalize_sequence(raw_X[i], SEQ_LENGTH) for i in val_idx]
     X_val = np.array(val_seqs, dtype=np.float32)
     y_val = raw_y[val_idx].copy()
 
-    # --- Z-score con estadisticas calculadas SOLO sobre train ---
+    # --- Z-score con estadísticas calculadas solo sobre train ---
     feat_mean = X_train.reshape(-1, NUM_FEATURES).mean(axis=0)
     feat_std = X_train.reshape(-1, NUM_FEATURES).std(axis=0) + 1e-8
     X_train = (X_train - feat_mean) / feat_std
@@ -161,7 +161,7 @@ def prepare_fold_data(raw_X, raw_y, train_idx, val_idx):
 
 
 def train_one_fold(X_train, y_train, X_val, y_val, num_classes, seed):
-    """Entrena un SignCNN sobre un fold y devuelve predicciones de validacion."""
+    """Entrena un SignCNN sobre un fold y devuelve predicciones de validación."""
     set_seed(seed)
 
     X_train_t = torch.tensor(X_train).permute(0, 2, 1)
@@ -232,7 +232,7 @@ def train_one_fold(X_train, y_train, X_val, y_val, num_classes, seed):
 
 
 # ----------------------------------------------------------------------------
-# Metricas
+# Métricas
 # ----------------------------------------------------------------------------
 
 def per_class_counts(y_true, y_pred, num_classes):
@@ -271,7 +271,7 @@ def confusion_matrix(y_true, y_pred, num_classes):
 
 
 def plot_confusion_matrix(cm, class_names, output_path, title):
-    """Guarda una matriz de confusion en PNG, con conteos y porcentajes por fila."""
+    """Guarda una matriz de confusión en PNG, con conteos y porcentajes por fila."""
     cm_pct = cm.astype(float)
     row_sums = cm_pct.sum(axis=1, keepdims=True)
     row_sums[row_sums == 0] = 1.0
@@ -338,7 +338,7 @@ def main():
                 X_tr, y_tr, X_va, y_va, num_classes, seed
             )
 
-            # --- Metricas del fold ---
+            # --- Métricas del fold ---
             acc = float((val_preds == y_va).mean())
             pcs = per_class_counts(y_va, val_preds, num_classes)
             mp, mr, mf1 = macro_average(pcs)
@@ -445,7 +445,7 @@ def main():
     with open(summary_json, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
 
-    # ------------------- Matriz de confusion agregada -------------------
+    # ------------------- Matriz de confusión agregada -------------------
     cm_png = os.path.join(out_dir, "kfold_confusion_matrix.png")
     title = (f"Matriz de confusion agregada\n"
              f"{N_SPLITS}-fold x {len(SEEDS)} seeds | "

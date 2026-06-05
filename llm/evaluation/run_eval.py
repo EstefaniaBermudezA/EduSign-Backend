@@ -2,7 +2,7 @@
 
 Lanza cada pregunta de ``gold_standard.json`` varias veces contra el endpoint
 ``/ask``, calcula métricas automáticas de formato (idioma, número de oraciones,
-saludos, preguntas de vuelta) y latencia, y vuelca los resultados a CSV/JSON en
+saludos, preguntas de vuelta) y latencia, y almacena los resultados a CSV/JSON en
 ``results/``. Las columnas de evaluación humana (pertinencia, veracidad, etc.) se
 dejan vacías para completarse a mano. Se ejecuta con:
 ``python run_eval.py [--endpoint URL] [--gold RUTA] [--out DIR]``.

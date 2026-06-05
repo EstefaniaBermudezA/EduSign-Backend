@@ -1,25 +1,25 @@
 """
-Evaluacion Leave-One-Participant-Out (LOPO) del clasificador CNN 1D de senas LSC.
+Evaluación Leave-One-Participant-Out (LOPO) del clasificador CNN 1D de señas LSC.
 
-Responde a la pregunta relevante para el despliegue en VR: ¿que tan bien
-generaliza el modelo a una PERSONA NUEVA que nunca vio?
+Responde a la pregunta relevante para el despliegue en VR: ¿qué tan bien
+generaliza el modelo a una persona nueva que nunca vio?
 
 A diferencia de kfold_evaluation.py (que reparte muestras al azar y por tanto
-mezcla a la misma persona entre train y validacion), aqui cada fold deja FUERA
-a TODAS las senas de un participante: se entrena con los otros 10 y se evalua
+mezcla a la misma persona entre train y validación), aquí cada fold deja fuera
+a todas las señas de un participante: se entrena con los otros 10 y se evalúa
 con el participante retenido. Se rota por los 11 participantes (p01..p11).
 
 Mantiene el mismo protocolo sin leakage del k-fold (reutiliza sus utilidades):
- - El split se hace sobre las muestras CRUDAS, por participante.
- - El data augmentation se aplica SOLO a las muestras de train.
- - La normalizacion z-score se calcula SOLO sobre train y se aplica a val.
- - Se repite con varias semillas para promediar el ruido de inicializacion.
+ - El split se hace sobre las muestras crudas, por participante.
+ - El data augmentation se aplica solo a las muestras de train.
+ - La normalización z-score se calcula solo sobre train y se aplica a val.
+ - Se repite con varias semillas para promediar el ruido de inicialización.
 
 Salidas (en evaluation/results/):
  - lopo_per_fold.csv          -> una fila por seed x participante con acc/F1
  - lopo_per_participant.csv   -> una fila por participante (media +/- std de seeds)
  - lopo_summary.json          -> resumen agregado (global y por participante/clase)
- - lopo_confusion_matrix.png  -> matriz de confusion agregada sobre todos los folds
+ - lopo_confusion_matrix.png  -> matriz de confusión agregada sobre todos los folds
 
 Uso (desde sign_recognition/):
     python evaluation/lopo_evaluation.py
@@ -42,7 +42,7 @@ SRC_DIR = os.path.join(PROJECT_ROOT, "src")
 sys.path.insert(0, THIS_DIR)
 sys.path.insert(0, SRC_DIR)
 
-from kfold_evaluation import (  # noqa: E402
+from kfold_evaluation import ( 
     prepare_fold_data,
     train_one_fold,
     per_class_counts,
@@ -52,7 +52,7 @@ from kfold_evaluation import (  # noqa: E402
 )
 
 # ----------------------------------------------------------------------------
-# Configuracion del experimento
+# Configuración del experimento
 # ----------------------------------------------------------------------------
 SEEDS = [42, 123, 2025]
 
@@ -232,7 +232,7 @@ def main():
     with open(summary_json, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
 
-    # ------------------- Matriz de confusion agregada -------------------
+    # ------------------- Matriz de confusión agregada -------------------
     cm_png = os.path.join(out_dir, "lopo_confusion_matrix.png")
     g = summary["global_metrics_pct"]
     title = (f"Matriz de confusion LOPO agregada\n"

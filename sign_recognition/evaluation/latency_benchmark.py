@@ -1,8 +1,7 @@
 """
-Benchmark de latencia del clasificador CNN 1D de senas LSC en CPU.
+Benchmark de latencia del clasificador CNN 1D de señas LSC en CPU.
 
-Mide tres aspectos relevantes para el RNF de tiempo de respuesta del Anexo B
-y para la afirmacion de "modelo ligero" del Anexo C:
+Mide:
 
   1. Latencia de inferencia por muestra individual (batch=1).
      Reporta p50, p90, p95, p99, media, max sobre N_RUNS corridas
@@ -11,16 +10,16 @@ y para la afirmacion de "modelo ligero" del Anexo C:
   2. Throughput por lote (batch=32 y batch=128).
      Mide muestras por segundo.
 
-  3. Pipeline lite end-to-end (sin captura de camara): normalizacion z-score
-     + permutacion + forward + softmax + argmax. Reporta p50, p95, p99.
+  3. Pipeline lite end-to-end (sin captura de cámara): normalización z-score
+     + permutación + forward + softmax + argmax. Reporta p50, p95, p99.
 
 Adicionalmente reporta:
-  - Numero de parametros del modelo.
-  - Tamano del archivo .pth serializado en disco.
-  - Informacion del entorno (CPU, threads de torch).
+  - Número de parámetros del modelo.
+  - Tamaño del archivo .pth serializado en disco.
+  - Información del entorno (CPU, threads de torch).
 
 Salidas (en evaluation/results/):
-  - latency_benchmark.json    -> todas las metricas
+  - latency_benchmark.json    -> todas las métricas
   - latency_histogram.png     -> histograma de latencia por muestra (batch=1)
 
 Uso (desde sign_recognition_eval/):
@@ -42,10 +41,10 @@ PROJECT_ROOT = os.path.dirname(THIS_DIR)
 SRC_DIR = os.path.join(PROJECT_ROOT, "src")
 sys.path.insert(0, SRC_DIR)
 
-from train_model import SignCNN, SEQ_LENGTH, NUM_FEATURES  # noqa: E402
+from train_model import SignCNN, SEQ_LENGTH, NUM_FEATURES  
 
 # ----------------------------------------------------------------------------
-# Configuracion
+# Configuración
 # ----------------------------------------------------------------------------
 MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "signs_cnn.pth")
 WARMUP_RUNS = 50
@@ -78,13 +77,13 @@ def time_perf_ms():
 
 
 def measure_inference_latency(model, batch_size, n_runs, warmup):
-    """Latencia pura de forward sobre un tensor sintetico de tamano batch."""
+    """Latencia pura de forward sobre un tensor sintético de tamaño batch."""
     x = torch.randn(batch_size, NUM_FEATURES, SEQ_LENGTH, dtype=torch.float32)
     # Warmup
     with torch.no_grad():
         for _ in range(warmup):
             _ = model(x)
-    # Medicion
+    # Medición
     samples_ms = []
     with torch.no_grad():
         for _ in range(n_runs):
@@ -96,7 +95,7 @@ def measure_inference_latency(model, batch_size, n_runs, warmup):
 
 
 def measure_pipeline_latency(model, feat_mean, feat_std, n_runs, warmup):
-    """Pipeline 'lite' end-to-end (sin MediaPipe): normalizacion + forward + softmax + argmax."""
+    """Pipeline 'lite' end-to-end (sin MediaPipe): normalización + forward + softmax + argmax."""
     samples_ms = []
     raw = np.random.randn(SEQ_LENGTH, NUM_FEATURES).astype(np.float32)
 

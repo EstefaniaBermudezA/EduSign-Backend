@@ -1,8 +1,8 @@
-"""Detector de senas LSC en tiempo real desde la webcam (con visualizacion).
+"""Detector de señas LSC en tiempo real desde la webcam (con visualización).
 
 Captura video, extrae landmarks de manos y hombros con MediaPipe y los acumula
 en un buffer. Cuando detecta que las manos se quedan quietas (variancia baja
-sostenida), clasifica la secuencia capturada con la SignCNN y muestra la sena
+sostenida), clasifica la secuencia capturada con la SignCNN y muestra la seña
 reconocida junto con las probabilidades sobre el frame. Se ejecuta con:
     python src/main.py [--camera 0] [--threshold ...] [--confidence ...]
 """
@@ -44,8 +44,8 @@ def load_model(model_path):
 
     Returns:
         Tupla (model en modo eval, idx_to_label, feat_mean, feat_std). Los dos
-        ultimos son los estadisticos z-score con que se normalizo el entreno y
-        son necesarios para clasificar coherentemente en produccion.
+        últimos son los estadísticos z-score con que se normalizó el entreno y
+        son necesarios para clasificar coherentemente en producción.
     """
     checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
 
@@ -111,7 +111,7 @@ def extract_landmarks(hand_result, pose_result):
     left_sh = pose_lms[LEFT_SHOULDER_IDX]
     right_sh = pose_lms[RIGHT_SHOULDER_IDX]
 
-    # Origen = centro de los hombros; hace la sena invariante a la posicion.
+    # Origen = centro de los hombros; hace la seña invariante a la posición.
     origin = np.array([
         (left_sh.x + right_sh.x) / 2,
         (left_sh.y + right_sh.y) / 2,
@@ -121,7 +121,7 @@ def extract_landmarks(hand_result, pose_result):
     left_hand_lms = None
     right_hand_lms = None
 
-    # "Left"/"Right" de MediaPipe estan en vista de camara (espejados) respecto
+    # "Left"/"Right" de MediaPipe están en vista de cámara (espejados) respecto
     # a las manos reales de la persona.
     if hand_result.hand_landmarks and hand_result.handedness:
         for i, handedness_list in enumerate(hand_result.handedness):
@@ -132,7 +132,7 @@ def extract_landmarks(hand_result, pose_result):
                 left_hand_lms = hand_result.hand_landmarks[i]
 
     def hand_to_array(lms, num_points):
-        # Mano ausente -> ceros para conservar la dimension del vector.
+        # Mano ausente -> ceros para conservar la dimensión del vector.
         if lms is None:
             return np.zeros(num_points * 3)
         coords = []
@@ -152,11 +152,11 @@ def extract_landmarks(hand_result, pose_result):
 
 
 def compute_hand_variance(buffer, window=15):
-    """Variancia media del movimiento de manos en los ultimos `window` frames.
+    """Variancia media del movimiento de manos en los últimos `window` frames.
 
     Se usa como detector de quietud: un valor bajo indica que las manos dejaron
-    de moverse, senal de que la sena termino. Solo considera los 126 features
-    de manos (ignora hombros). Devuelve inf si aun no hay suficientes frames.
+    de moverse, señal de que la seña terminó. Solo considera los 126 features
+    de manos (ignora hombros). Devuelve inf si aún no hay suficientes frames.
     """
     if len(buffer) < window:
         return float('inf')
@@ -168,11 +168,11 @@ def compute_hand_variance(buffer, window=15):
 def classify_sequence(model, sequence, idx_to_label, feat_mean, feat_std):
     """Clasifica una secuencia de frames capturada con la SignCNN.
 
-    Reinterpola la secuencia a SEQ_LENGTH, aplica la normalizacion z-score del
+    Reinterpola la secuencia a SEQ_LENGTH, aplica la normalización z-score del
     entrenamiento y ejecuta la red.
 
     Returns:
-        Tupla (label, confidence, class_idx, probs) con la sena predicha, su
+        Tupla (label, confidence, class_idx, probs) con la seña predicha, su
         probabilidad softmax y el vector de probabilidades de todas las clases.
     """
     normalized = normalize_sequence(np.array(sequence), SEQ_LENGTH)
@@ -180,7 +180,7 @@ def classify_sequence(model, sequence, idx_to_label, feat_mean, feat_std):
     if feat_mean is not None and feat_std is not None:
         normalized = (normalized - feat_mean) / feat_std
 
-    # unsqueeze(0) anade la dimension de batch; permute -> (batch, feat, seq).
+    # unsqueeze(0) añade la dimensión de batch; permute -> (batch, feat, seq).
     tensor = torch.tensor(normalized, dtype=torch.float32).unsqueeze(0)
     tensor = tensor.permute(0, 2, 1)
 
@@ -196,7 +196,7 @@ def classify_sequence(model, sequence, idx_to_label, feat_mean, feat_std):
 
 
 def draw_status(frame, text, color, confidence=None, variance=None, fps=None, probs=None, idx_to_label=None):
-    """Dibuja sobre el frame el estado del detector, las barras de probabilidad y metricas (HUD)."""
+    """Dibuja sobre el frame el estado del detector, las barras de probabilidad y métricas (HUD)."""
     h, w = frame.shape[:2]
 
     cv2.rectangle(frame, (0, 0), (w, 70), BLACK, -1)
@@ -232,11 +232,11 @@ def draw_status(frame, text, color, confidence=None, variance=None, fps=None, pr
 
 
 def main():
-    """Bucle principal del detector: captura, deteccion de quietud y clasificacion.
+    """Bucle principal del detector: captura, detección de quietud y clasificación.
 
-    Implementa una maquina de estados sobre la variancia de manos: acumula
+    Implementa una máquina de estados sobre la variancia de manos: acumula
     frames mientras hay movimiento y, cuando se detecta quietud sostenida (y no
-    se esta en cooldown), clasifica la sena, la muestra y reinicia el buffer.
+    se está en cooldown), clasifica la seña, la muestra y reinicia el buffer.
     """
     import argparse
     parser = argparse.ArgumentParser(description="Deteccion en tiempo real de senas LSC")
@@ -325,8 +325,8 @@ def main():
                 stillness_duration = now - stillness_start
 
                 if stillness_duration >= STILLNESS_DURATION and not in_cooldown:
-                    # Descarta los ultimos 15 frames (la fase de quietud final)
-                    # para clasificar solo la parte activa de la sena.
+                    # Descarta los últimos 15 frames (la fase de quietud final)
+                    # para clasificar solo la parte activa de la seña.
                     active_frames = list(buffer)[:-15]
 
                     if len(active_frames) >= MIN_ACTIVE_FRAMES:

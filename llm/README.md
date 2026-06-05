@@ -1,6 +1,6 @@
 # EduSign Backend — Módulo LLM
 
-Microservicio FastAPI que expone un modelo de lenguaje (LLM) como **narrador o personaje histórico** para EduSign. Recibe la pregunta de un niño y devuelve una respuesta corta, en español y con vocabulario simple, adecuada para estudiantes sordos en la experiencia de realidad virtual.
+Microservicio FastAPI que expone un modelo de lenguaje (LLM) como narrador o personaje histórico para EduSign. Recibe la pregunta de un niño y devuelve una respuesta corta, en español y con vocabulario simple, adecuada para estudiantes sordos en la experiencia de realidad virtual.
 
 Hace parte del backend monolítico modular de EduSign; corre de forma independiente con su propio `uvicorn`.
 
@@ -10,7 +10,7 @@ Hace parte del backend monolítico modular de EduSign; corre de forma independie
 |------------|-----------|
 | FastAPI | Framework web asíncrono |
 | Uvicorn | Servidor ASGI |
-| Hugging Face Inference Router | Acceso al modelo (formato compatible con OpenAI) |
+| Hugging Face Inference Router | Acceso al modelo |
 | Qwen2.5-7B-Instruct | Modelo de lenguaje seleccionado |
 | requests | Cliente HTTP hacia el router de HF |
 | python-dotenv | Carga de variables de entorno |

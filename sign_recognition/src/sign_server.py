@@ -1,8 +1,8 @@
-"""Servidor WebSocket que transmite las senas reconocidas a Unreal Engine 5.
+"""Servidor WebSocket que transmite las señas reconocidas a Unreal Engine 5.
 
-Corre el detector de senas en un hilo aparte y expone un WebSocket: cuando UE5
-envia "start_capture" se activa la captura, y cada sena reconocida con
-confianza suficiente se reenvia como JSON a los clientes conectados. La captura
+Corre el detector de señas en un hilo aparte y expone un WebSocket: cuando UE5
+envía "start_capture" se activa la captura, y cada seña reconocida con
+confianza suficiente se reenvía como JSON a los clientes conectados. La captura
 se apaga al recibir "animation_started"/"stop_capture", evitando detecciones
 mientras el avatar reproduce la respuesta. Se ejecuta con:
     python src/sign_server.py [--host ...] [--port 8765] [--camera 0]
@@ -35,25 +35,25 @@ from main import (
 )
 
 # Estado compartido entre el hilo del detector y el loop asyncio del WebSocket.
-detection_queue: "asyncio.Queue" = None   # senas detectadas pendientes de enviar
+detection_queue: "asyncio.Queue" = None   # señas detectadas pendientes de enviar
 connected_clients = set()
-stop_event = threading.Event()            # senaliza al worker que debe terminar
+stop_event = threading.Event()            # señaliza al worker que debe terminar
 
-# Interruptor de captura: el worker solo procesa frames cuando esta activo;
+# Interruptor de captura: el worker solo procesa frames cuando está activo;
 # lo controlan los mensajes de UE5 (start/stop) desde el handler.
 capture_enabled = threading.Event()
 
 
 def detection_worker(args, loop):
-    """Hilo que captura camara, detecta senas y las encola hacia el WebSocket.
+    """Hilo que captura cámara, detecta señas y las encola hacia el WebSocket.
 
-    Reutiliza el pipeline de main.py (deteccion de quietud + clasificacion),
-    pero solo procesa frames mientras `capture_enabled` esta activo. Cada sena
+    Reutiliza el pipeline de main.py (detección de quietud + clasificación),
+    pero solo procesa frames mientras `capture_enabled` está activo. Cada seña
     reconocida con confianza suficiente se encola en `detection_queue` mediante
     run_coroutine_threadsafe para cruzar del hilo al loop asyncio.
 
     Args:
-        args: Argumentos de CLI (camara, umbrales de variancia y confianza).
+        args: Argumentos de CLI (cámara, umbrales de variancia y confianza).
         loop: Event loop de asyncio donde vive la cola, para encolar de forma
             segura entre hilos.
     """
@@ -88,7 +88,7 @@ def detection_worker(args, loop):
         timestamp_ms += 33
 
         # Captura apagada: descarta el buffer para no mezclar frames viejos
-        # con la proxima sesion de captura.
+        # con la próxima sesión de captura.
         if not capture_enabled.is_set():
             buffer.clear()
             stillness_start = None
@@ -157,7 +157,7 @@ async def handler(websocket):
 
     Registra al cliente y procesa sus acciones: start_capture/ask activan la
     captura; animation_started/sign_recognized y stop_capture la apagan. Al
-    desconectarse el ultimo cliente tambien apaga la captura.
+    desconectarse el último cliente también apaga la captura.
     """
     print(f"[WS] Cliente conectado: {websocket.remote_address}")
     connected_clients.add(websocket)
@@ -196,7 +196,7 @@ async def handler(websocket):
 
 
 async def main_async(args):
-    """Arranca el worker de deteccion, el broadcaster y el servidor WebSocket."""
+    """Arranca el worker de detección, el broadcaster y el servidor WebSocket."""
     global detection_queue
     detection_queue = asyncio.Queue()
     loop = asyncio.get_running_loop()

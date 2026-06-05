@@ -1,10 +1,10 @@
-"""Entrena la 1D-CNN que clasifica secuencias de landmarks en senas LSC.
+"""Entrena la 1D-CNN que clasifica secuencias de landmarks en señas LSC.
 
 Carga los features .npy generados por extract_features.py, arma el dataset con
-data augmentation y normalizacion z-score, entrena la red SignCNN con early
+data augmentation y normalización z-score, entrena la red SignCNN con early
 stopping y guarda el checkpoint (pesos + metadatos) en models/signs_cnn.pth.
-Define ademas las utilidades de senales (SignCNN, normalize_sequence,
-augment_sample, ...) que reutilizan el servidor, el detector y la evaluacion.
+Define además las utilidades de señales (SignCNN, normalize_sequence,
+augment_sample, ...) que reutilizan el servidor, el detector y la evaluación.
 Se ejecuta con:
     python src/train_model.py
 """
@@ -28,10 +28,10 @@ RANDOM_SEED = 42
 AUGMENTATION_PER_SAMPLE = 8
 
 class SignCNN(nn.Module):
-    """Red 1D-CNN para clasificacion multi-clase de secuencias de landmarks."""
+    """Red 1D-CNN para clasificación multi-clase de secuencias de landmarks."""
 
     def __init__(self, num_features=NUM_FEATURES, seq_length=SEQ_LENGTH, num_classes=9):
-        # La convolucion 1D recorre el eje temporal (frames); cada feature de
+        # La convolución 1D recorre el eje temporal (frames); cada feature de
         # landmark es un canal de entrada. Los bloques aumentan la receptividad
         # temporal y la profundidad de canales, y al final un AdaptiveAvgPool1d
         # colapsa el tiempo a un descriptor de longitud fija para el clasificador.
@@ -55,7 +55,7 @@ class SignCNN(nn.Module):
             nn.ReLU(),
             nn.Dropout(0.4),
 
-            # Bloque 4: compresion
+            # Bloque 4: compresión
             nn.Conv1d(128, 64, kernel_size=3, padding=1),
             nn.BatchNorm1d(64),
             nn.ReLU(),
@@ -105,13 +105,13 @@ def aug_gaussian_noise(seq, sigma=0.03):
 
 
 def aug_scale(seq, low=0.85, high=1.15):
-    """Escalar coordenadas (simula persona mas cerca/lejos)."""
+    """Escalar coordenadas (simula persona más cerca/lejos)."""
     scale = np.random.uniform(low, high)
     return seq * scale
 
 
 def aug_time_warp(seq):
-    """Deformacion temporal no lineal (acelera/desacelera partes)."""
+    """Deformación temporal no lineal (acelera/desacelera partes)."""
     n = len(seq)
     x = np.linspace(0, 1, n)
     warp_point = np.random.uniform(0.2, 0.8)
@@ -135,7 +135,7 @@ def aug_time_warp(seq):
 
 
 def aug_speed_change(seq_raw, target_length):
-    """Recorta un tramo del video crudo y lo reinterpola (simula velocidad de sena)."""
+    """Recorta un tramo del video crudo y lo reinterpola (simula velocidad de seña)."""
     n = len(seq_raw)
     crop_ratio = np.random.uniform(0.6, 1.0)
     crop_len = max(int(n * crop_ratio), target_length)
@@ -146,13 +146,13 @@ def aug_speed_change(seq_raw, target_length):
 
 
 def aug_spatial_jitter(seq, jitter=0.015):
-    """Desplaza toda la secuencia con un offset constante por feature (jitter de posicion)."""
+    """Desplaza toda la secuencia con un offset constante por feature (jitter de posición)."""
     offset = np.random.randn(seq.shape[1]) * jitter
     return seq + offset
 
 
 def aug_mirror_hands(seq):
-    """Refleja la sena horizontalmente: intercambia manos y niega el eje X.
+    """Refleja la seña horizontalmente: intercambia manos y niega el eje X.
 
     Simula a una persona zurda/diestra. Reordena los bloques de mano izquierda
     y derecha, invierte la coordenada x de cada landmark y reasigna los hombros.
@@ -182,7 +182,7 @@ def aug_drop_hand(seq):
 def augment_sample(seq_raw, target_length):
     """Genera una variante aumentada de una muestra encadenando transformaciones.
 
-    Aplica de forma estocastica (con distintas probabilidades) cambio de
+    Aplica de forma estocástica (con distintas probabilidades) cambio de
     velocidad, time warp, ruido, escala, jitter, espejado y drop de mano para
     ampliar la diversidad del set de entrenamiento.
 
@@ -226,7 +226,7 @@ def load_features(features_dir):
 
 
 def discover_classes(features_root):
-    """Devuelve los nombres de clase (subcarpetas) ordenados alfabeticamente."""
+    """Devuelve los nombres de clase (subcarpetas) ordenados alfabéticamente."""
     class_dirs = sorted([
         d for d in os.listdir(features_root)
         if os.path.isdir(os.path.join(features_root, d))
@@ -299,13 +299,13 @@ def prepare_dataset(features_root, validation_split=VALIDATION_SPLIT, random_see
     return X_train, y_train, X_val, y_val, label_map, num_classes, feat_mean, feat_std
 
 def train(features_root, model_output_path):
-    """Entrena la SignCNN y guarda el mejor modelo segun val_loss.
+    """Entrena la SignCNN y guarda el mejor modelo según val_loss.
 
     Arma los loaders, compensa el desbalance de clases con pesos en la
     CrossEntropyLoss, entrena con Adam + ReduceLROnPlateau y early stopping
-    (se queda con los pesos del menor val_loss), imprime la matriz de confusion
-    de validacion y serializa el checkpoint con pesos, mapeo de etiquetas y
-    estadisticos z-score en model_output_path.
+    (se queda con los pesos del menor val_loss), imprime la matriz de confusión
+    de validación y serializa el checkpoint con pesos, mapeo de etiquetas y
+    estadísticos z-score en model_output_path.
     """
     random.seed(RANDOM_SEED)
     np.random.seed(RANDOM_SEED)
@@ -324,7 +324,7 @@ def train(features_root, model_output_path):
     train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
 
     # Pesos inversamente proporcionales a la frecuencia para compensar el
-    # desbalance entre clases en la perdida.
+    # desbalance entre clases en la pérdida.
     class_counts = np.bincount(y_train, minlength=num_classes).astype(np.float32)
     class_weights = 1.0 / (class_counts + 1e-8)
     class_weights = class_weights / class_weights.sum() * num_classes

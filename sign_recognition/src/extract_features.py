@@ -1,4 +1,4 @@
-"""Extrae los features de landmarks (manos + hombros) de videos de senas LSC.
+"""Extrae los features de landmarks (manos + hombros) de videos de señas LSC.
 
 Recorre los videos de una clase, ejecuta los detectores de MediaPipe (Hand
 Landmarker y Pose Landmarker) frame por frame y guarda la secuencia de
@@ -53,8 +53,8 @@ def extract_landmarks_from_results(hand_result, pose_result):
     """Construye el vector de features de un frame a partir de manos y pose.
 
     Toma el punto medio de los hombros como origen y expresa todas las
-    coordenadas de forma relativa a el, de modo que la sena sea invariante a
-    la posicion del cuerpo dentro del encuadre. El layout de los 132 features
+    coordenadas de forma relativa a él, de modo que la seña sea invariante a
+    la posición del cuerpo dentro del encuadre. El layout de los 132 features
     es: mano izquierda (63), mano derecha (63) y hombros (6).
 
     Args:
@@ -62,7 +62,7 @@ def extract_landmarks_from_results(hand_result, pose_result):
         pose_result: Resultado del Pose Landmarker para el frame.
 
     Returns:
-        np.ndarray de 132 features, o None si no se detecto pose (sin pose no
+        np.ndarray de 132 features, o None si no se detectó pose (sin pose no
         hay origen de referencia y el frame se descarta).
     """
     if not pose_result.pose_landmarks or len(pose_result.pose_landmarks) == 0:
@@ -82,7 +82,7 @@ def extract_landmarks_from_results(hand_result, pose_result):
     left_hand_lms = None
     right_hand_lms = None
 
-    # MediaPipe etiqueta la lateralidad desde la vista de la camara (espejada),
+    # MediaPipe etiqueta la lateralidad desde la vista de la cámara (espejada),
     # por eso "Left" del detector corresponde a la mano derecha de la persona.
     if hand_result.hand_landmarks and hand_result.handedness:
         for i, handedness_list in enumerate(hand_result.handedness):
@@ -93,7 +93,7 @@ def extract_landmarks_from_results(hand_result, pose_result):
                 left_hand_lms = hand_result.hand_landmarks[i]
 
     def hand_to_array(lms, num_points):
-        # Mano no detectada -> vector de ceros para mantener dimension constante.
+        # Mano no detectada -> vector de ceros para mantener dimensión constante.
         if lms is None:
             return np.zeros(num_points * 3)
         coords = []
@@ -117,7 +117,7 @@ def process_video(video_path, hand_landmarker, pose_landmarker):
 
     Returns:
         np.ndarray de forma (n_frames_con_landmarks, 132), o None si el video
-        no se pudo abrir o no se detectaron landmarks en ningun frame.
+        no se pudo abrir o no se detectaron landmarks en ningún frame.
     """
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():

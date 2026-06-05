@@ -244,45 +244,6 @@ python evaluation/latency_benchmark.py
 python evaluation/evaluate_model.py       # holdout del modelo desplegado
 ```
 
-> **Cuál métrica reportar.** La cifra de referencia para reportar generalización
-> es la de `kfold_evaluation.py`: **83.46 % ± 10.42 %** (media ± desviación de
-> 5-fold × 3 semillas = 15 entrenamientos). `evaluate_model.py` mide un único
-> split de ~18 muestras de validación, por lo que su número (94.44 %) es honesto
-> pero ruidoso —un solo error equivale a ~5.6 puntos— y cae dentro del rango del
-> k-fold. Sirve para inspeccionar el modelo concreto que se despliega, no como
-> métrica principal.
->
-> Ambos comparten el mismo protocolo **sin data leakage**: el split se hace sobre
-> las muestras crudas, la augmentation se aplica solo a train y el z-score se
-> calcula con estadísticas de train. (Una versión anterior de `prepare_dataset`
-> normalizaba y aumentaba antes de separar, lo que inflaba la métrica a ~96.7 %.)
-
-### Tres niveles de evaluación (de menos a más exigente)
-
-Todas las evaluaciones son sin leakage; lo que cambia es **qué tipo de
-generalización** mide cada una:
-
-1. **Holdout (`evaluate_model.py`) — 94.44 %.** Un solo split de ~18 muestras.
-   Inspecciona el modelo concreto que se despliega; ruidoso, no es métrica principal.
-2. **k-fold (`kfold_evaluation.py`) — 83.46 % ± 10.42 %.** Reparte muestras al azar,
-   así que la misma persona puede aparecer en train y validación. Mide la
-   generalización a **señas nuevas de personas conocidas**.
-3. **LOPO (`lopo_evaluation.py`) — 91.92 % ± 14.51 %.** Deja fuera a un participante
-   completo (sus 9 señas) y entrena con los otros 10, rotando por los 11. Mide la
-   generalización a una **persona nueva**, que es el escenario real de despliegue VR.
-
-**Variabilidad por participante.** La alta desviación de LOPO no es ruido: el
-desempeño depende fuertemente de quién sea la persona nueva. Seis participantes
-alcanzan 100 %, pero **p01 (66.7 %) y p08 (74.1 %)** son consistentemente difíciles
-(probablemente por un estilo de señar atípico). El detalle por participante está en
-`evaluation/results/lopo_per_participant.csv` y la matriz de confusión agregada en
-`lopo_confusion_matrix.png`. Esto da una lectura honesta de robustez ante usuarios nuevos.
-
-> Nota de reproducibilidad: como las métricas se calculan sobre folds pequeños
-> (9–20 muestras) y el entrenamiento en CPU multihilo no es bit-a-bit determinista,
-> los números pueden variar ~1–2 puntos entre corridas. Por eso todas las
-> evaluaciones promedian varias semillas y se reportan como media ± desviación.
-
 El módulo `llm/` tiene su propia evaluación en [`llm/evaluation/`](llm/evaluation/)
 (gold standard de preguntas/respuestas y resultados en `llm/evaluation/results/`).
 

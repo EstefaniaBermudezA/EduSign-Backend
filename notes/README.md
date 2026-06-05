@@ -1,57 +1,64 @@
-# EduSign Backend — Notes module
+# EduSign Backend — Módulo de notas
 
-Módulo del repo `EduSign-Backend` que guarda y consulta las notas que los niños generan cuando guardan respuestas del LLM en su sesión de aprendizaje en VR.
+Microservicio FastAPI que guarda y consulta las notas que los niños generan cuando guardan respuestas del LLM durante su sesión de aprendizaje en realidad virtual.
 
-Hace parte del backend monolítico modular:
-- `llm/` — proxy al LLM (puerto 8000)
-- `sign_recognition/` — reconocimiento de señas
-- `notes/` — este módulo (puerto 8001)
-
-Cada submódulo corre independientemente con su propio `uvicorn`.
+Hace parte del backend monolítico modular de EduSign; corre de forma independiente con su propio `uvicorn`.
 
 ## Stack
 
-- FastAPI
-- MongoDB Atlas (cloud free tier)
-- PyMongo con Stable API v1
+| Tecnología | Propósito |
+|------------|-----------|
+| FastAPI | Framework web asíncrono |
+| Uvicorn | Servidor ASGI |
+| MongoDB Atlas | Base de datos (cloud free tier) |
+| PyMongo (Stable API v1) | Cliente de MongoDB |
+| python-dotenv | Carga de variables de entorno |
 
-## Setup
+## Puertos del backend
 
-1. Crear y activar virtualenv:
+| Servicio | Puerto |
+| --- | --- |
+| `llm` | 8000 |
+| **`notes`** | **8001** |
+| `students` | 8002 |
 
-   ```
-   python -m venv .venv
-   .venv\Scripts\activate
-   ```
+## Variables de entorno
 
-2. Instalar dependencias:
+Copiar la plantilla y completar con la cadena de conexión de Mongo Atlas:
 
-   ```
-   pip install -r requirements.txt
-   ```
+```bash
+copy .env.example .env          # Windows
+# cp .env.example .env          # Linux / macOS
+```
 
-3. Crear archivo `.env` copiando `.env.example` y completando con la password real de Mongo Atlas:
+## Instalación
 
-   ```
-   copy .env.example .env
-   ```
+```bash
+cd notes
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+# source .venv/bin/activate     # Linux / macOS
+pip install -r requirements.txt
+```
 
-4. Correr el servicio (puerto 8001 para no chocar con el LLM en 8000):
+## Uso
 
-   ```
-   uvicorn app:app --reload --port 8001
-   ```
+```bash
+uvicorn app:app --reload --port 8001
+```
+
+El servicio queda disponible en `http://localhost:8001` (puerto 8001 para no chocar con el LLM en 8000). Documentación interactiva en `http://localhost:8001/docs`.
 
 ## Endpoints
 
-| Método | Ruta              | Descripción |
-|--------|-------------------|-------------|
-| GET    | `/health`         | Status del servicio + Mongo |
-| POST   | `/notes`          | Guarda una nota nueva |
-| GET    | `/notes`          | Lista todas las notas (filtrable por `user_id`) |
-| DELETE | `/notes/{id}`     | Borra una nota por id |
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/health` | Estado del servicio + Mongo |
+| POST | `/notes` | Guarda una nota nueva |
+| GET | `/notes` | Lista las notas (filtrable por `user_id`) |
+| DELETE | `/notes/{id}` | Borra una nota por id |
 
-### Ejemplo POST /notes
+### Ejemplo `POST /notes`
 
 ```json
 {
@@ -63,7 +70,7 @@ Cada submódulo corre independientemente con su propio `uvicorn`.
 }
 ```
 
-### Ejemplo GET /notes
+### Ejemplo `GET /notes`
 
 Filtrar por usuario y limitar a 20:
 
@@ -73,16 +80,26 @@ GET /notes?user_id=default_user&limit=20
 
 ## Esquema en MongoDB
 
-Colección: `edusign.notes`
+Colección `edusign.notes`:
 
 ```json
 {
-  "_id": ObjectId("..."),
+  "_id": "ObjectId(...)",
   "sign": "Nilo",
   "question": "...",
   "answer": "...",
   "user_id": "default_user",
   "character": "Anubis",
-  "created_at": ISODate("2026-05-17T...")
+  "created_at": "ISODate(2026-05-17T...)"
 }
+```
+
+## Estructura
+
+```
+notes/
+├── app.py            # API FastAPI (endpoints de notas)
+├── requirements.txt
+├── .env.example      # Plantilla de variables de entorno
+└── README.md
 ```

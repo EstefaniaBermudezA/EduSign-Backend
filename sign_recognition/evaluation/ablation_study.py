@@ -1,20 +1,20 @@
 """
-Estudio de ablacion para el clasificador CNN 1D de senas LSC.
+Estudio de ablación para el clasificador CNN 1D de señas LSC.
 
-Reutiliza la metodologia 5-fold x 3 seeds SIN leakage definida en
-kfold_evaluation.py y evalua cuatro variantes:
+Reutiliza la metodología 5-fold x 3 seeds sin leakage definida en
+kfold_evaluation.py y evalúa cuatro variantes:
 
   - full           : pipeline completo (augmentation + z-score + class weights)
   - no_augment     : sin data augmentation (solo las 99 muestras crudas)
-  - no_zscore      : sin normalizacion z-score (entrada cruda)
-  - no_class_w     : sin pesos por clase en la entropia cruzada
+  - no_zscore      : sin normalización z-score (entrada cruda)
+  - no_class_w     : sin pesos por clase en la entropía cruzada
 
 Para cada variante se reporta accuracy y F1 macro (media +/- std combinando
 folds y seeds) y el delta vs la variante 'full'.
 
 Salidas (en evaluation/results/):
  - ablation_per_fold.csv     -> una fila por variante x seed x fold
- - ablation_summary.csv      -> una fila por variante con metricas agregadas
+ - ablation_summary.csv      -> una fila por variante con métricas agregadas
  - ablation_comparison.json  -> deltas vs full (accuracy y F1)
 
 Uso (desde sign_recognition_eval/):
@@ -31,20 +31,20 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
-# Reutilizar utilidades del kfold (que a su vez importa del modulo original)
+# Reutilizar utilidades del kfold (que a su vez importa del módulo original)
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(THIS_DIR)
 sys.path.insert(0, THIS_DIR)
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
 
-from kfold_evaluation import (  # noqa: E402
+from kfold_evaluation import (
     set_seed,
     load_raw_dataset,
     stratified_kfold_indices,
     per_class_counts,
     macro_average,
 )
-from train_model import (  # noqa: E402
+from train_model import (
     SignCNN,
     normalize_sequence,
     augment_sample,
@@ -75,7 +75,7 @@ VARIANTS = [
 
 
 # ----------------------------------------------------------------------------
-# Preparacion de datos parametrizada por variante
+# Preparación de datos parametrizada por variante
 # ----------------------------------------------------------------------------
 
 def prepare_fold_data_variant(raw_X, raw_y, train_idx, val_idx,
@@ -101,7 +101,7 @@ def prepare_fold_data_variant(raw_X, raw_y, train_idx, val_idx,
     X_val = np.array(val_seqs, dtype=np.float32)
     y_val = raw_y[val_idx].copy()
 
-    # --- Z-score (opcional) ---
+    # --- Z-score ---
     if use_zscore:
         feat_mean = X_train.reshape(-1, NUM_FEATURES).mean(axis=0)
         feat_std = X_train.reshape(-1, NUM_FEATURES).std(axis=0) + 1e-8
@@ -180,11 +180,11 @@ def train_one_fold_variant(X_train, y_train, X_val, y_val,
 
 
 # ----------------------------------------------------------------------------
-# Orquestacion por variante
+# Orquestación por variante
 # ----------------------------------------------------------------------------
 
 def run_variant(variant_name, raw_X, raw_y, num_classes):
-    """Corre 5-fold x 3 seeds para una variante y devuelve metricas."""
+    """Corre 5-fold x 3 seeds para una variante y devuelve métricas."""
     use_augment = variant_name != "no_augment"
     use_zscore = variant_name != "no_zscore"
     use_class_w = variant_name != "no_class_w"

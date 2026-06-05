@@ -1,18 +1,18 @@
 """
-Lineas base MLP para comparar contra la CNN 1D del clasificador de senas LSC.
+Líneas base MLP para comparar contra la CNN 1D del clasificador de señas LSC.
 
 Compara dos arquitecturas alternativas, ambas evaluadas con el mismo protocolo
 5-fold x 3 seeds sin leakage definido en kfold_evaluation.py:
 
   - MLP_flat   : aplana la secuencia (60 x 132 = 7920) y la pasa por
-                 capas densas. Tamano calibrado para ~176k parametros,
+                 capas densas. Tamaño calibrado para ~176k parámetros,
                  comparable con la CNN 1D (~178k).
   - MLP_pooled : agrega temporalmente la secuencia (mean pooling sobre los 60
                  cuadros) y clasifica el vector de pose promedio (~26k params).
-                 Sirve para evaluar cuanto aporta la informacion temporal.
+                 Sirve para evaluar cuánto aporta la información temporal.
 
 Para cada modelo se reporta accuracy, F1 macro (media +/- std combinando 15
-entrenamientos), numero de parametros y latencia de inferencia (batch=1).
+entrenamientos), número de parámetros y latencia de inferencia (batch=1).
 Adicionalmente, se comparan los resultados contra la CNN 1D leyendo
 kfold_summary.json del experimento anterior.
 
@@ -41,7 +41,7 @@ SRC_DIR = os.path.join(PROJECT_ROOT, "src")
 sys.path.insert(0, THIS_DIR)
 sys.path.insert(0, SRC_DIR)
 
-from kfold_evaluation import (  # noqa: E402
+from kfold_evaluation import ( 
     set_seed,
     load_raw_dataset,
     stratified_kfold_indices,
@@ -49,7 +49,7 @@ from kfold_evaluation import (  # noqa: E402
     per_class_counts,
     macro_average,
 )
-from train_model import (  # noqa: E402
+from train_model import ( 
     SEQ_LENGTH,
     NUM_FEATURES,
     BATCH_SIZE,
@@ -57,7 +57,7 @@ from train_model import (  # noqa: E402
 )
 
 # ----------------------------------------------------------------------------
-# Configuracion
+# Configuración
 # ----------------------------------------------------------------------------
 N_SPLITS = 5
 SEEDS = [42, 123, 2025]
@@ -79,7 +79,7 @@ LAT_RUNS = 200
 class SignMLPFlat(nn.Module):
     """MLP sobre el vector aplanado (60 x 132 = 7920).
 
-    Calibrado para ~176k parametros, comparable con la CNN 1D (~178k).
+    Calibrado para ~176k parámetros, comparable con la CNN 1D (~178k).
     """
 
     def __init__(self, num_features=NUM_FEATURES, seq_length=SEQ_LENGTH, num_classes=9):
@@ -108,8 +108,8 @@ class SignMLPFlat(nn.Module):
 class SignMLPPooled(nn.Module):
     """MLP sobre el vector pose promedio (mean-pool sobre el eje temporal).
 
-    Pierde la informacion temporal: clasifica solo la "pose promedio".
-    Sirve para medir cuanto aporta la dinamica de la sena al rendimiento.
+    Pierde la información temporal: clasifica solo la "pose promedio".
+    Sirve para medir cuánto aporta la dinámica de la seña al rendimiento.
     """
 
     def __init__(self, num_features=NUM_FEATURES, num_classes=9):
@@ -306,7 +306,7 @@ def main():
         for r in all_rows:
             f.write(",".join(str(r[k]) for k in fieldnames) + "\n")
 
-    # --- Leer resultados de la CNN 1D para comparacion ---
+    # --- Leer resultados de la CNN 1D para comparación ---
     cnn_row = None
     kfold_json = os.path.join(out_dir, "kfold_summary.json")
     cnn_latency_json = os.path.join(out_dir, "latency_benchmark.json")

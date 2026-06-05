@@ -1,16 +1,16 @@
-"""Analiza los CSV de telemetria de EduSign VR y genera figuras de evaluacion.
+"""Analiza los CSV de telemetría de EduSign VR y genera figuras de evaluación.
 
 Lee los archivos ``session_*_events|tracking|signs.csv`` exportados por la app de
-Unreal, construye un resumen por sesion y produce las figuras del experimento
-(accuracy, confianza y latencia del reconocimiento, matrices de confusion,
-tiempos por escena, heatmaps/trayectorias del HMD y manos, y flujo de navegacion).
+Unreal, construye un resumen por sesión y produce las figuras del experimento
+(accuracy, confianza y latencia del reconocimiento, matrices de confusión,
+tiempos por escena, heatmaps/trayectorias del HMD y manos, y flujo de navegación).
 
-Se ejecuta desde la linea de comandos::
+Se ejecuta desde la línea de comandos::
 
     python analyze_sessions.py --telemetry-dir <carpeta_csv> --output-dir <carpeta_figuras>
 
 ``--telemetry-dir`` apunta a la carpeta con los CSV (por defecto se autodetecta la
-ruta de exportacion de Unreal); ``--output-dir`` indica donde guardar las figuras y
+ruta de exportación de Unreal); ``--output-dir`` indica dónde guardar las figuras y
 el ``resumen_sesiones.csv`` (se crea si no existe).
 """
 
@@ -51,7 +51,7 @@ SCENE_COLORS = {
 PRINCIPAL_SCENES = ["TarakMap", "AnubisMap", "MagnusMap"]
 
 def _safe_read_csv(path: Path) -> pd.DataFrame | None:
-    """Lee un CSV; retorna None si esta vacio o si hay error."""
+    """Lee un CSV; retorna None si está vacío o si hay error."""
     try:
         df = pd.read_csv(path)
         if df.empty:
@@ -65,11 +65,11 @@ def _safe_read_csv(path: Path) -> pd.DataFrame | None:
 
 
 def load_all_sessions(telemetry_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Carga y concatena todos los CSV de telemetria de la carpeta indicada.
+    """Carga y concatena todos los CSV de telemetría de la carpeta indicada.
 
     Returns:
-        Tupla ``(events, tracking, signs)``; cada DataFrame queda vacio si no hay
-        archivos de ese grupo o si todos estaban vacios.
+        Tupla ``(events, tracking, signs)``; cada DataFrame queda vacío si no hay
+        archivos de ese grupo o si todos estaban vacíos.
     """
     if not telemetry_dir.exists():
         raise FileNotFoundError(f"No existe el directorio: {telemetry_dir}")
@@ -92,7 +92,7 @@ def load_all_sessions(telemetry_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, 
     return events, tracking, signs
 
 def build_session_summary(events: pd.DataFrame, tracking: pd.DataFrame, signs: pd.DataFrame) -> pd.DataFrame:
-    """Resume cada sesion: duracion, escenas visitadas y conteos de signs/tracking.
+    """Resume cada sesión: duración, escenas visitadas y conteos de signs/tracking.
 
     Returns:
         DataFrame con una fila por ``session_id``, ordenado por dicho identificador.
@@ -122,18 +122,18 @@ def build_session_summary(events: pd.DataFrame, tracking: pd.DataFrame, signs: p
     return pd.DataFrame(rows).sort_values("session_id").reset_index(drop=True)
 
 def plot_accuracy_por_personaje(signs: pd.DataFrame, output_dir: Path) -> None:
-    """Grafica un barras de accuracy del reconocimiento de senas por personaje."""
+    """Grafica un barras de accuracy del reconocimiento de señas por personaje."""
     if signs.empty:
         print("  [skip] accuracy_por_personaje: no hay datos de signs")
         return
 
-    # Solo cuentan las filas con etiqueta esperada (las de practica libre no la traen).
+    # Solo cuentan las filas con etiqueta esperada (las de práctica libre no la traen).
     valid = signs[(signs["expected_label"].notna()) & (signs["expected_label"] != "")].copy()
     if valid.empty:
         print("  [skip] accuracy_por_personaje: no hay filas con expected_label")
         return
 
-    # Comparacion case-insensitive para evitar falsos negativos por mayusculas.
+    # Comparación case-insensitive para evitar falsos negativos por mayúsculas.
     valid["correct"] = valid["expected_label"].str.lower() == valid["predicted_label"].str.lower()
     stats = valid.groupby("personaje").agg(
         total=("correct", "size"),
@@ -156,7 +156,7 @@ def plot_accuracy_por_personaje(signs: pd.DataFrame, output_dir: Path) -> None:
     print("  [ok] accuracy_por_personaje.png")
 
 def plot_confusion_matrices(signs: pd.DataFrame, output_dir: Path) -> None:
-    """Grafica una matriz de confusion (esperado vs predicho) por cada personaje."""
+    """Grafica una matriz de confusión (esperado vs predicho) por cada personaje."""
     if signs.empty:
         return
 
@@ -166,7 +166,7 @@ def plot_confusion_matrices(signs: pd.DataFrame, output_dir: Path) -> None:
         return
 
     for personaje, df in valid.groupby("personaje"):
-        # Union de etiquetas esperadas y predichas para que la matriz sea cuadrada.
+        # Unión de etiquetas esperadas y predichas para que la matriz sea cuadrada.
         labels = sorted(set(df["expected_label"]).union(set(df["predicted_label"])))
         if not labels:
             continue
@@ -210,14 +210,14 @@ def plot_confianza_por_personaje(signs: pd.DataFrame, output_dir: Path) -> None:
 
 
 def plot_confianza_por_sena(signs: pd.DataFrame, output_dir: Path) -> None:
-    """Grafica un violinplot de la confianza para las senas predichas mas frecuentes."""
+    """Grafica un violinplot de la confianza para las señas predichas más frecuentes."""
     if signs.empty:
         return
     df = signs[signs["confidence"].notna() & signs["predicted_label"].notna()].copy()
     if df.empty:
         return
 
-    # Se limita a las 12 senas mas frecuentes para mantener el eje X legible.
+    # Se limita a las 12 señas más frecuentes para mantener el eje X legible.
     top_senas = df["predicted_label"].value_counts().head(12).index.tolist()
     df = df[df["predicted_label"].isin(top_senas)]
     if df.empty:
@@ -237,10 +237,10 @@ def plot_confianza_por_sena(signs: pd.DataFrame, output_dir: Path) -> None:
     print("  [ok] confianza_por_sena.png")
 
 def plot_latencia_por_personaje(signs: pd.DataFrame, output_dir: Path) -> None:
-    """Grafica un boxplot de la latencia (pregunta -> sena del estudiante) por personaje."""
+    """Grafica un boxplot de la latencia (pregunta -> seña del estudiante) por personaje."""
     if signs.empty:
         return
-    # Latencias <= 0 son invalidas (sena sin pregunta previa) y se descartan.
+    # Latencias <= 0 son inválidas (seña sin pregunta previa) y se descartan.
     df = signs[(signs["latency_ms"].notna()) & (signs["latency_ms"] > 0)].copy()
     if df.empty:
         print("  [skip] latencia: no hay filas con latencia > 0")
@@ -263,9 +263,9 @@ def plot_latencia_por_personaje(signs: pd.DataFrame, output_dir: Path) -> None:
     print("  [ok] latencia_por_personaje.png")
 
 def _scene_durations(events: pd.DataFrame) -> pd.DataFrame:
-    """Calcula la permanencia en cada escena por sesion.
+    """Calcula la permanencia en cada escena por sesión.
 
-    La duracion de una escena es el tiempo hasta el siguiente ``scene_enter`` (o el
+    La duración de una escena es el tiempo hasta el siguiente ``scene_enter`` (o el
     ``session_end``), por eso ambos tipos de evento se intercalan ordenados.
 
     Returns:
@@ -314,12 +314,12 @@ def plot_tiempo_por_escena(events: pd.DataFrame, output_dir: Path) -> None:
     print("  [ok] tiempo_por_escena.png")
 
 def plot_hmd_heatmaps(tracking: pd.DataFrame, output_dir: Path) -> None:
-    """Grafica un heatmap 2D de la posicion del HMD por cada escena principal."""
+    """Grafica un heatmap 2D de la posición del HMD por cada escena principal."""
     if tracking.empty:
         return
     for escena in PRINCIPAL_SCENES:
         df = tracking[tracking["escena"] == escena]
-        # Se omiten escenas con muy pocas muestras: el histograma no seria representativo.
+        # Se omiten escenas con muy pocas muestras: el histograma no sería representativo.
         if df.empty or len(df) < 20:
             continue
 
@@ -342,7 +342,7 @@ def plot_trayectoria_manos(tracking: pd.DataFrame, output_dir: Path) -> None:
     if tracking.empty:
         return
     for escena in PRINCIPAL_SCENES:
-        # Se ordena por tiempo para que la linea siga el recorrido real, no el orden de filas.
+        # Se ordena por tiempo para que la línea siga el recorrido real, no el orden de filas.
         df = tracking[tracking["escena"] == escena].sort_values("timestamp_ms")
         if df.empty or len(df) < 20:
             continue
@@ -370,14 +370,14 @@ def plot_flujo_navegacion(events: pd.DataFrame, output_dir: Path) -> None:
     if df.empty:
         return
 
-    # Cada transicion es (escena actual -> siguiente escena de la misma sesion).
+    # Cada transición es (escena actual -> siguiente escena de la misma sesión).
     df["next_escena"] = df.groupby("session_id")["escena"].shift(-1)
     transitions = df.dropna(subset=["next_escena"])
     if transitions.empty:
         return
     pair_counts = transitions.groupby(["escena", "next_escena"]).size().reset_index(name="count")
 
-    # Posicion fija (columna, fila) de cada escena conocida para un diagrama estable.
+    # Posición fija (columna, fila) de cada escena conocida para un diagrama estable.
     layout_cols = {
         "M_LogIn": 0,
         "M_MainMenu": 1,
@@ -418,7 +418,7 @@ def plot_flujo_navegacion(events: pd.DataFrame, output_dir: Path) -> None:
         dst = positions.get(row["next_escena"])
         if src is None or dst is None or src == dst:
             continue
-        # Grosor y tamano de flecha proporcionales a la frecuencia de la transicion.
+        # Grosor y tamaño de flecha proporcionales a la frecuencia de la transición.
         width = 0.5 + 3.5 * (row["count"] / max_count)
         arrow = FancyArrowPatch(src, dst, arrowstyle="->",
                                 mutation_scale=15 + 15 * (row["count"] / max_count),
@@ -442,7 +442,7 @@ def plot_flujo_navegacion(events: pd.DataFrame, output_dir: Path) -> None:
     print("  [ok] flujo_navegacion.png")
 
 def default_telemetry_dir() -> Path:
-    """Ruta default: ../../Unreal Projects/Edusign_VR_Final/Saved/Telemetry/ relativo al script."""
+    """Ruta default: ../../Unreal Projects/Edusign_VR_Final/Saved/Telemetry/ """
     script = Path(__file__).resolve().parent
     candidates = [
         script.parents[2] / "Documents" / "Unreal Projects" / "Edusign_VR_Final" / "Saved" / "Telemetry",
@@ -456,10 +456,10 @@ def default_telemetry_dir() -> Path:
 
 
 def main() -> int:
-    """Punto de entrada CLI: carga la telemetria, escribe el resumen y genera las figuras.
+    """Punto de entrada CLI: carga la telemetría, escribe el resumen y genera las figuras.
 
     Returns:
-        Codigo de salida ``0`` si todo corrio bien, ``1`` si no se encontraron datos.
+        Código de salida ``0`` si todo corrió bien, ``1`` si no se encontraron datos.
     """
     parser = argparse.ArgumentParser(description="Analiza CSVs de telemetria EduSign VR.")
     parser.add_argument("--telemetry-dir", type=Path, default=default_telemetry_dir(),

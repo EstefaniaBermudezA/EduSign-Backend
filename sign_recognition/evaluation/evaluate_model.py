@@ -1,18 +1,18 @@
 """
-Evaluacion offline (holdout) del modelo signs_cnn.pth ya entrenado.
+Evaluación offline (holdout) del modelo signs_cnn.pth ya entrenado.
 
-Reproduce EXACTAMENTE el split de validacion de train_model.py (mismo
-RANDOM_SEED=42 y mismo prepare_dataset sin leakage) y evalua el modelo
-guardado sobre esas muestras de validacion, que NO se usaron para entrenar.
+Reproduce EXACTAMENTE el split de validación de train_model.py (mismo
+RANDOM_SEED=42 y mismo prepare_dataset sin leakage) y evalúa el modelo
+guardado sobre esas muestras de validación, que NO se usaron para entrenar.
 Produce, en evaluation/results/:
-  - metrics_summary.json    -> metricas globales
+  - metrics_summary.json    -> métricas globales
   - metrics_per_class.csv   -> precision/recall/F1/soporte por clase
-  - confusion_matrix.png    -> matriz de confusion
+  - confusion_matrix.png    -> matriz de confusión
 
-Relacion con kfold_evaluation.py:
-    Este script es un check de UN solo split (~20 muestras de validacion), por
-    lo que su numero es honesto pero ruidoso. La metrica de referencia para
-    reportar generalizacion es la de kfold_evaluation.py (5-fold x 3 seeds),
+Relación con kfold_evaluation.py:
+    Este script es un check de un solo split (~20 muestras de validación), por
+    lo que su número es honesto pero ruidoso. La métrica de referencia para
+    reportar generalización es la de kfold_evaluation.py (5-fold x 3 seeds),
     que promedia 15 entrenamientos. Ambos comparten el mismo protocolo sin
     leakage; este sirve para inspeccionar el modelo concreto que se despliega.
 
@@ -40,7 +40,7 @@ from train_model import (
 
 
 def per_class_metrics(y_true, y_pred, num_classes):
-    """Devuelve precision, recall, f1 y soporte por clase (en %)."""
+    """Devuelve precisión, recall, f1 y soporte por clase (en %)."""
     out = []
     for c in range(num_classes):
         tp = int(((y_pred == c) & (y_true == c)).sum())
@@ -123,7 +123,7 @@ def main():
     y_true = y_val.astype(np.int64)
     y_pred = preds.astype(np.int64)
 
-    # Metricas
+    # Métricas
     accuracy = float((y_pred == y_true).mean())
     per_class = per_class_metrics(y_true, y_pred, num_classes)
     total_support = sum(m["support"] for m in per_class)
@@ -152,7 +152,7 @@ def main():
     with open(os.path.join(output_dir, "metrics_per_class.csv"), "w", encoding="utf-8") as f:
         f.write("\n".join(csv_lines))
 
-    # Matriz de confusion
+    # Matriz de confusión
     cm = np.zeros((num_classes, num_classes), dtype=np.int64)
     for t, p in zip(y_true, y_pred):
         cm[t, p] += 1
