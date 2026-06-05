@@ -235,8 +235,20 @@ def discover_classes(features_root):
     return class_dirs
 
 
-def prepare_dataset(features_root):
-    """Carga todas las clases con augmentation robusto y normalizacion z-score."""
+def prepare_dataset(features_root, validation_split=VALIDATION_SPLIT, random_seed=RANDOM_SEED):
+    """Carga las clases y separa train/val SIN data leakage.
+
+    Orden correcto (sin fuga de informacion de validacion):
+      1. Separa las secuencias CRUDAS en train/val de forma estratificada,
+         ANTES de aumentar nada.
+      2. Aplica data augmentation SOLO a las muestras de train. Validacion
+         conserva unicamente la version normalizada de cada gesto crudo.
+      3. Calcula el z-score con estadisticas de TRAIN y lo aplica a train y val.
+
+    Asi ninguna copia aumentada de un gesto de validacion entra al entrenamiento
+    y la normalizacion no "ve" datos de validacion. Es el mismo protocolo que
+    kfold_evaluation.py, pero con un unico split (mas rapido, mas ruidoso).
+    """
     class_names = discover_classes(features_root)
     if not class_names:
         print(f"[ERROR] No se encontraron carpetas de clases en: {features_root}")
@@ -247,74 +259,61 @@ def prepare_dataset(features_root):
 
     label_map = {name: i for i, name in enumerate(class_names)}
 
-    # Cargar todas las secuencias raw por clase
-    raw_data = {}  # class_name -> list of raw sequences
-    for class_name in class_names:
-        class_dir = os.path.join(features_root, class_name)
-        print(f"\n  [{class_name}] (clase {label_map[class_name]}):")
-        raw_data[class_name] = load_features(class_dir)
-
-    # Generar dataset con augmentation
-    all_X = []
-    all_y = []
-
+    # 1. Cargar secuencias crudas y separarlas en train/val ANTES de aumentar.
+    #    Se usa un RandomState propio para que el split sea reproducible e
+    #    independiente del resto de llamadas a np.random (augmentation, etc.).
+    rng = np.random.RandomState(random_seed)
+    train_raw, train_lbl = [], []
+    val_raw, val_lbl = [], []
     for class_name in class_names:
         class_id = label_map[class_name]
-        sequences = raw_data[class_name]
+        class_dir = os.path.join(features_root, class_name)
+        print(f"\n  [{class_name}] (clase {class_id}):")
+        seqs = load_features(class_dir)
 
-        for seq in sequences:
-            # Original normalizado
-            normalized = normalize_sequence(seq, SEQ_LENGTH)
-            all_X.append(normalized)
-            all_y.append(class_id)
+        order = np.arange(len(seqs))
+        rng.shuffle(order)
+        n_train = int(round(len(seqs) * (1 - validation_split)))
+        if len(seqs) > 1:
+            n_train = max(1, min(n_train, len(seqs) - 1))  # garantizar >=1 en val
+        for rank, i in enumerate(order):
+            if rank < n_train:
+                train_raw.append(seqs[i]); train_lbl.append(class_id)
+            else:
+                val_raw.append(seqs[i]); val_lbl.append(class_id)
 
-            # Augmented versions
-            for _ in range(AUGMENTATION_PER_SAMPLE):
-                aug = augment_sample(seq, SEQ_LENGTH)
-                all_X.append(aug)
-                all_y.append(class_id)
+    # 2. Augmentation SOLO en train; validacion solo normalizada.
+    train_X, train_y = [], []
+    for seq, lbl in zip(train_raw, train_lbl):
+        train_X.append(normalize_sequence(seq, SEQ_LENGTH))
+        train_y.append(lbl)
+        for _ in range(AUGMENTATION_PER_SAMPLE):
+            train_X.append(augment_sample(seq, SEQ_LENGTH))
+            train_y.append(lbl)
 
-    X = np.array(all_X, dtype=np.float32)
-    y = np.array(all_y, dtype=np.int64)
+    X_train = np.array(train_X, dtype=np.float32)
+    y_train = np.array(train_y, dtype=np.int64)
+    X_val = np.array([normalize_sequence(seq, SEQ_LENGTH) for seq in val_raw],
+                     dtype=np.float32)
+    y_val = np.array(val_lbl, dtype=np.int64)
 
-    # --- Normalizacion Z-score global ---
-    # Calcular sobre todo el dataset, guardar para usar en inferencia
-    feat_mean = X.reshape(-1, NUM_FEATURES).mean(axis=0)
-    feat_std = X.reshape(-1, NUM_FEATURES).std(axis=0) + 1e-8
+    # 3. Z-score con estadisticas calculadas SOLO sobre train.
+    feat_mean = X_train.reshape(-1, NUM_FEATURES).mean(axis=0)
+    feat_std = X_train.reshape(-1, NUM_FEATURES).std(axis=0) + 1e-8
+    X_train = (X_train - feat_mean) / feat_std
+    X_val = (X_val - feat_mean) / feat_std
 
-    X = (X - feat_mean) / feat_std
-
-    print(f"\nZ-score aplicado: mean~{feat_mean.mean():.4f}, std~{feat_std.mean():.4f}")
-
-    # Stratified shuffle: asegurar que cada clase este en train y val
-    indices_by_class = {i: np.where(y == i)[0] for i in range(num_classes)}
-    train_indices = []
-    val_indices = []
-
-    for class_id in range(num_classes):
-        cls_idx = indices_by_class[class_id]
-        np.random.shuffle(cls_idx)
-        split = int(len(cls_idx) * (1 - VALIDATION_SPLIT))
-        train_indices.extend(cls_idx[:split])
-        val_indices.extend(cls_idx[split:])
-
-    train_indices = np.array(train_indices)
-    val_indices = np.array(val_indices)
-    np.random.shuffle(train_indices)
-    np.random.shuffle(val_indices)
-
-    X_train, y_train = X[train_indices], y[train_indices]
-    X_val, y_val = X[val_indices], y[val_indices]
+    print(f"\nZ-score (stats de train): mean~{feat_mean.mean():.4f}, std~{feat_std.mean():.4f}")
 
     # Resumen
     print(f"\n{'='*50}")
-    print(f"DATASET COMPLETO")
+    print(f"DATASET (split sin leakage, val={validation_split:.0%})")
     print(f"{'='*50}")
     for name, idx in label_map.items():
-        tr = (y_train == idx).sum()
-        va = (y_val == idx).sum()
-        print(f"  Clase {idx} ({name:12s}): train={tr:3d}  val={va:3d}")
-    print(f"  Total: train={len(X_train)} val={len(X_val)}")
+        tr_raw = sum(1 for l in train_lbl if l == idx)
+        va = sum(1 for l in val_lbl if l == idx)
+        print(f"  Clase {idx} ({name:12s}): train_raw={tr_raw:3d} (+aug)  val={va:3d}")
+    print(f"  Total: train={len(X_train)} (de {len(train_raw)} crudas)  val={len(X_val)}")
 
     return X_train, y_train, X_val, y_val, label_map, num_classes, feat_mean, feat_std
 

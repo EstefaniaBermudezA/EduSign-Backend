@@ -34,7 +34,7 @@ EduSign-Backend/
 │   │   ├── ablation_study.py      # Ablación: augmentation / z-score / class weights
 │   │   ├── baseline_mlp.py        # Líneas base MLP vs. la CNN 1D
 │   │   ├── latency_benchmark.py   # Benchmark de latencia en CPU (RNF de tiempo)
-│   │   ├── evaluate_model.py      # Evaluación holdout (con sesgo por leakage, ver nota)
+│   │   ├── evaluate_model.py      # Evaluación holdout de un solo split (sin leakage)
 │   │   └── results/               # CSV / JSON / PNG generados por los scripts
 │   ├── models/
 │   │   └── signs_cnn.pth          # Modelo CNN entrenado
@@ -229,23 +229,30 @@ virtual activo y escriben sus salidas en `evaluation/results/`.
 | `kfold_evaluation.py` | Validación cruzada estratificada 5-fold × 3 seeds, **sin data leakage** (augmentation y z-score calculados solo sobre el train de cada fold). | **Accuracy 83.46 % ± 10.42 %** · F1 macro 82.57 % |
 | `ablation_study.py` | Mide el aporte de augmentation, z-score y class weights desactivándolos uno a uno. | Δ accuracy / F1 vs. configuración completa |
 | `baseline_mlp.py` | Compara la CNN 1D contra dos MLP (aplanado y mean-pooling) bajo el mismo protocolo. | CNN 1D vs. MLP_flat vs. MLP_pooled |
-| `latency_benchmark.py` | Latencia de inferencia en CPU (p50/p95/p99) y verificación del RNF de < 2000 ms. | Latencia pipeline (batch=1) |
-| `evaluate_model.py` | Evaluación holdout que reproduce el split de `train_model.py`. | Accuracy 96.67 % ⚠️ |
+| `latency_benchmark.py` | Latencia de inferencia en CPU (p50/p95/p99) y verificación del RNF de < 2000 ms. | p99 pipeline 0.78 ms ✓ |
+| `evaluate_model.py` | Evaluación holdout del modelo desplegado sobre un único split sin leakage (~18 muestras). | Accuracy 94.44 % |
 
 ```bash
 cd sign_recognition
-python evaluation/kfold_evaluation.py     # evaluación de referencia (sin leakage)
+python evaluation/kfold_evaluation.py     # evaluación de referencia (15 entrenamientos)
 python evaluation/ablation_study.py
 python evaluation/baseline_mlp.py
 python evaluation/latency_benchmark.py
+python evaluation/evaluate_model.py       # holdout del modelo desplegado
 ```
 
-> ⚠️ **Cuál métrica reportar.** `evaluate_model.py` reproduce el split original de
-> `train_model.py`, que aumenta los datos y calcula el z-score sobre *todo* el
-> dataset **antes** de separar train/val. Eso filtra información de validación
-> (copias aumentadas de un mismo gesto caen en ambos lados) e infla la accuracy a
-> ~96.7 %. La cifra metodológicamente correcta es la de `kfold_evaluation.py`:
-> **83.46 % ± 10.42 %**. Se recomienda reportar esta última.
+> **Cuál métrica reportar.** La cifra de referencia para reportar generalización
+> es la de `kfold_evaluation.py`: **83.46 % ± 10.42 %** (media ± desviación de
+> 5-fold × 3 semillas = 15 entrenamientos). `evaluate_model.py` mide un único
+> split de ~18 muestras de validación, por lo que su número (94.44 %) es honesto
+> pero ruidoso —un solo error equivale a ~5.6 puntos— y cae dentro del rango del
+> k-fold. Sirve para inspeccionar el modelo concreto que se despliega, no como
+> métrica principal.
+>
+> Ambos comparten el mismo protocolo **sin data leakage**: el split se hace sobre
+> las muestras crudas, la augmentation se aplica solo a train y el z-score se
+> calcula con estadísticas de train. (Una versión anterior de `prepare_dataset`
+> normalizaba y aumentaba antes de separar, lo que inflaba la métrica a ~96.7 %.)
 
 El módulo `llm/` tiene su propia evaluación en [`llm/evaluation/`](llm/evaluation/)
 (gold standard de preguntas/respuestas y resultados en `llm/evaluation/results/`).

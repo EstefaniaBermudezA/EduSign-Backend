@@ -1,19 +1,20 @@
 """
 Evaluacion offline (holdout) del modelo signs_cnn.pth ya entrenado.
 
-Reproduce el split de validacion usando el mismo RANDOM_SEED=42 que en
-train_model.py y produce, en evaluation/results/:
+Reproduce EXACTAMENTE el split de validacion de train_model.py (mismo
+RANDOM_SEED=42 y mismo prepare_dataset sin leakage) y evalua el modelo
+guardado sobre esas muestras de validacion, que NO se usaron para entrenar.
+Produce, en evaluation/results/:
   - metrics_summary.json    -> metricas globales
   - metrics_per_class.csv   -> precision/recall/F1/soporte por clase
   - confusion_matrix.png    -> matriz de confusion
 
-ADVERTENCIA - sesgo optimista por leakage:
-    prepare_dataset() aplica data augmentation y calcula el z-score sobre TODO
-    el dataset ANTES de separar train/val. Por eso copias aumentadas de un mismo
-    gesto pueden caer a la vez en train y en validacion, y la metrica resultante
-    (~96-97%) esta inflada. Para una estimacion sin leakage usar
-    kfold_evaluation.py (5-fold x 3 seeds), que reporta ~83% de accuracy.
-    Este script se conserva como referencia del split de entrenamiento original.
+Relacion con kfold_evaluation.py:
+    Este script es un check de UN solo split (~20 muestras de validacion), por
+    lo que su numero es honesto pero ruidoso. La metrica de referencia para
+    reportar generalizacion es la de kfold_evaluation.py (5-fold x 3 seeds),
+    que promedia 15 entrenamientos. Ambos comparten el mismo protocolo sin
+    leakage; este sirve para inspeccionar el modelo concreto que se despliega.
 
 Uso (desde sign_recognition/):
     python evaluation/evaluate_model.py

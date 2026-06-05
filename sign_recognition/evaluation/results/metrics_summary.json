@@ -1,9 +1,9 @@
 {
-  "accuracy_global_pct": 96.67,
-  "precision_ponderada_pct": 96.74,
-  "recall_ponderado_pct": 96.67,
-  "f1_ponderado_pct": 96.68,
-  "perdida_validacion_final": 0.1017,
-  "muestras_validacion": 180,
+  "accuracy_global_pct": 94.44,
+  "precision_ponderada_pct": 96.3,
+  "recall_ponderado_pct": 94.44,
+  "f1_ponderado_pct": 94.07,
+  "perdida_validacion_final": 0.3178,
+  "muestras_validacion": 18,
   "num_classes": 9
 }
