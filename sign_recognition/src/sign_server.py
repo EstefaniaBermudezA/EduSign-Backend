@@ -1,35 +1,11 @@
-"""
-Servidor WebSocket para integracion con Unreal Engine 5.
+"""Servidor WebSocket que transmite las senas reconocidas a Unreal Engine 5.
 
-Corre el detector de senas LSC en un thread de fondo y empuja cada
-deteccion a los clientes UE5 conectados, en formato JSON:
-
-    {"label": "quien", "confidence": 0.87, "timestamp": 1712345678.9}
-
-Modelo de captura controlada por UE5 (boton "Pregunta"):
-  - Default: captura APAGADA. El worker no procesa frames.
-  - Cuando el nino pulsa el boton, UE5 envia {"action":"start_capture"}.
-    Python enciende la captura.
-  - Python procesa frames y, cuando detecta una sena con suficiente
-    confianza, la envia a UE5 (pero sigue capturando por si la deteccion
-    no fue la que el nino queria).
-  - Cuando UE5 reconoce la sena y arranca la animacion, envia
-    {"action":"animation_started"}. Python apaga la captura
-    automaticamente.
-  - La captura solo vuelve a encenderse cuando el nino pulsa "Pregunta"
-    de nuevo.
-
-Caso de falso positivo (UE5 no tiene animacion para ese label):
-  - UE5 no envia animation_started. Python mantiene la captura encendida
-    y el nino puede intentar la sena de nuevo sin tener que volver a
-    pulsar el boton.
-
-Uso:
-    pip install websockets
-    python src/sign_server.py
-    python src/sign_server.py --host 0.0.0.0 --port 8765 --camera 0
-
-Desde UE5 conectas a: ws://127.0.0.1:8765
+Corre el detector de senas en un hilo aparte y expone un WebSocket: cuando UE5
+envia "start_capture" se activa la captura, y cada sena reconocida con
+confianza suficiente se reenvia como JSON a los clientes conectados. La captura
+se apaga al recibir "animation_started"/"stop_capture", evitando detecciones
+mientras el avatar reproduce la respuesta. Se ejecuta con:
+    python src/sign_server.py [--host ...] [--port 8765] [--camera 0]
 """
 
 import argparse
@@ -58,19 +34,29 @@ from main import (
     extract_landmarks, compute_hand_variance, classify_sequence,
 )
 
-# Cola thread-safe de detecciones (worker -> event loop)
-detection_queue: "asyncio.Queue" = None
+# Estado compartido entre el hilo del detector y el loop asyncio del WebSocket.
+detection_queue: "asyncio.Queue" = None   # senas detectadas pendientes de enviar
 connected_clients = set()
-stop_event = threading.Event()
+stop_event = threading.Event()            # senaliza al worker que debe terminar
 
-# Captura controlada por UE5. Default apagada hasta que el nino pulse
-# el boton "Pregunta" y UE5 envie start_capture. Se apaga cuando UE5
-# confirma que una sena fue reconocida (animation_started).
+# Interruptor de captura: el worker solo procesa frames cuando esta activo;
+# lo controlan los mensajes de UE5 (start/stop) desde el handler.
 capture_enabled = threading.Event()
 
 
 def detection_worker(args, loop):
-    """Thread que corre el detector y encola cada seña reconocida."""
+    """Hilo que captura camara, detecta senas y las encola hacia el WebSocket.
+
+    Reutiliza el pipeline de main.py (deteccion de quietud + clasificacion),
+    pero solo procesa frames mientras `capture_enabled` esta activo. Cada sena
+    reconocida con confianza suficiente se encola en `detection_queue` mediante
+    run_coroutine_threadsafe para cruzar del hilo al loop asyncio.
+
+    Args:
+        args: Argumentos de CLI (camara, umbrales de variancia y confianza).
+        loop: Event loop de asyncio donde vive la cola, para encolar de forma
+            segura entre hilos.
+    """
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     models_dir = os.path.join(project_root, "models")
 
@@ -101,8 +87,8 @@ def detection_worker(args, loop):
             continue
         timestamp_ms += 33
 
-        # Si la captura no esta habilitada, drenamos el buffer para no
-        # acumular movimiento parcial que se procesaria al reactivarse.
+        # Captura apagada: descarta el buffer para no mezclar frames viejos
+        # con la proxima sesion de captura.
         if not capture_enabled.is_set():
             buffer.clear()
             stillness_start = None
@@ -155,7 +141,7 @@ def detection_worker(args, loop):
 
 
 async def broadcaster():
-    """Consume la cola y reenvia cada deteccion a todos los clientes UE5."""
+    """Consume la cola de detecciones y las difunde a todos los clientes conectados."""
     while True:
         payload = await detection_queue.get()
         message = json.dumps(payload)
@@ -167,13 +153,15 @@ async def broadcaster():
 
 
 async def handler(websocket):
+    """Atiende a un cliente WebSocket y traduce sus mensajes en control de captura.
+
+    Registra al cliente y procesa sus acciones: start_capture/ask activan la
+    captura; animation_started/sign_recognized y stop_capture la apagan. Al
+    desconectarse el ultimo cliente tambien apaga la captura.
+    """
     print(f"[WS] Cliente conectado: {websocket.remote_address}")
     connected_clients.add(websocket)
     try:
-        # Mensajes entrantes desde UE5:
-        #   start_capture     -> enciende la captura (nino pulso "Pregunta")
-        #   animation_started -> apaga la captura (UE5 reconocio la sena)
-        #   stop_capture      -> apaga la captura explicitamente (opcional)
         async for raw in websocket:
             try:
                 data = json.loads(raw)
@@ -201,8 +189,6 @@ async def handler(websocket):
         pass
     finally:
         connected_clients.discard(websocket)
-        # Si no quedan clientes, apagamos la captura por seguridad para
-        # que no quede procesando frames sin nadie escuchando.
         if not connected_clients and capture_enabled.is_set():
             capture_enabled.clear()
             print("[WS] Sin clientes conectados. Captura APAGADA.")
@@ -210,6 +196,7 @@ async def handler(websocket):
 
 
 async def main_async(args):
+    """Arranca el worker de deteccion, el broadcaster y el servidor WebSocket."""
     global detection_queue
     detection_queue = asyncio.Queue()
     loop = asyncio.get_running_loop()

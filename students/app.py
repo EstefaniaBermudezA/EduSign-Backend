@@ -1,21 +1,11 @@
-"""
-EduSign Students Backend
-------------------------
-Servicio independiente para gestionar el padrón de estudiantes que
-pueden acceder a la experiencia VR de EduSign.
+"""Microservicio REST de estudiantes de EduSign.
 
-Endpoints:
-- GET    /health                 → status del servicio + Mongo
-- GET    /students/{codigo}      → busca un estudiante por código. Si no
-                                   existe, responde como "invitado" (no falla)
-- POST   /students               → registra un estudiante nuevo (admin)
-- GET    /students               → lista los estudiantes registrados (admin)
-- DELETE /students/{codigo}      → borra un estudiante (admin)
-
-Corre en el puerto 8002 por defecto:
-  - llm       → 8000
-  - notes     → 8001
-  - students  → 8002
+Expone una API FastAPI para registrar, consultar, listar y borrar estudiantes,
+con el caso de uso principal de resolver un código en un mensaje de bienvenida
+para la experiencia VR. Los datos se persisten en MongoDB usando ``codigo`` como
+clave única. Se ejecuta con un servidor ASGI, p. ej.
+``uvicorn students.app:app --reload``, y requiere ``MONGO_URI`` (más las
+opcionales ``MONGO_DB`` y ``STUDENTS_COLLECTION``).
 """
 
 import os
@@ -32,13 +22,8 @@ from pymongo import MongoClient, ASCENDING
 from pymongo.server_api import ServerApi
 from pymongo.errors import DuplicateKeyError
 
-# Carga el .env que vive al lado de este archivo (students/.env),
-# sin importar desde qué directorio se ejecute uvicorn.
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
-# =============================================
-# Config
-# =============================================
 MONGO_URI = os.getenv("MONGO_URI", "")
 MONGO_DB = os.getenv("MONGO_DB", "edusign")
 STUDENTS_COLLECTION = os.getenv("STUDENTS_COLLECTION", "students")
@@ -46,19 +31,12 @@ STUDENTS_COLLECTION = os.getenv("STUDENTS_COLLECTION", "students")
 if not MONGO_URI:
     raise RuntimeError("Falta MONGO_URI en variables de entorno.")
 
-# Mongo client (Stable API v1)
 mongo_client = MongoClient(MONGO_URI, server_api=ServerApi("1"))
 db = mongo_client[MONGO_DB]
 students_collection = db[STUDENTS_COLLECTION]
 
-# Índice único sobre `codigo` para no permitir duplicados.
-# create_index es idempotente: no falla si ya existe.
 students_collection.create_index([("codigo", ASCENDING)], unique=True)
 
-
-# =============================================
-# App
-# =============================================
 app = FastAPI(title="EduSign Students Backend", version="1.0.0")
 
 app.add_middleware(
@@ -69,22 +47,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# =============================================
-# Helpers
-# =============================================
 def normalizar_codigo(codigo: str) -> str:
-    """
-    Normaliza el código del estudiante.
-
-    El código son los números 1, 2, 3, ... que el profesor le asigna al niño.
-    Aceptamos cualquier forma razonable que pueda escribir: " 1 ", "01", "001"
-    todos resuelven al mismo registro ("1"). Si llega algo no numérico se
-    devuelve tal cual (mayúsculas, sin espacios) para no romper compatibilidad.
-    """
+    """Normaliza un código: quita espacios, elimina ceros a la izquierda en los
+    numéricos ('007' -> '7') y pasa a mayúsculas los alfanuméricos."""
     limpio = re.sub(r"\s+", "", codigo or "")
     if limpio.isdigit():
-        # Quita ceros a la izquierda: "001" -> "1", pero "0" sigue siendo "0".
         return str(int(limpio))
     return limpio.upper()
 
@@ -95,11 +62,9 @@ def normalizar_curso(curso: str) -> str:
         return ""
     return re.sub(r"[^0-9]", "", curso)
 
-
-# =============================================
-# Models
-# =============================================
 class StudentCreate(BaseModel):
+    """Cuerpo de la petición para registrar un estudiante."""
+
     codigo: str = Field(..., description="Código único del estudiante (ej. '1', '2', '3')")
     nombre: str = Field(..., description="Primer nombre del estudiante (ej. 'Sofia')")
     apellido: str = Field(..., description="Apellido del estudiante (ej. 'Martinez')")
@@ -107,6 +72,8 @@ class StudentCreate(BaseModel):
 
 
 class StudentResponse(BaseModel):
+    """Representación de un estudiante tal como se devuelve al cliente."""
+
     codigo: str
     nombre: str
     apellido: str
@@ -115,10 +82,8 @@ class StudentResponse(BaseModel):
 
 
 class StudentLookupResponse(BaseModel):
-    """
-    Respuesta del endpoint de login: siempre 200, con `found` indicando
-    si el estudiante está registrado o si entra como invitado.
-    """
+    """Resultado de consultar un código, con datos del estudiante o de invitado."""
+
     found: bool = Field(..., description="True si el código está registrado")
     codigo: str = Field(..., description="Código consultado (normalizado)")
     nombre: str = Field(..., description="Primer nombre del estudiante o 'Invitado'")
@@ -126,13 +91,9 @@ class StudentLookupResponse(BaseModel):
     curso: Optional[str] = Field(None, description="Curso si está registrado, sino None")
     mensaje: str = Field(..., description="Mensaje de bienvenida listo para mostrar en VR")
 
-
-# =============================================
-# Endpoints
-# =============================================
 @app.get("/health")
 def health():
-    """Health check del servicio y conectividad con Mongo."""
+    """Comprueba el estado del servicio y la conectividad con MongoDB."""
     try:
         mongo_client.admin.command("ping")
         mongo_ok = True
@@ -149,12 +110,13 @@ def health():
 
 @app.get("/students/{codigo}", response_model=StudentLookupResponse)
 def lookup_student(codigo: str):
-    """
-    Busca un estudiante por código.
+    """Resuelve un código en un mensaje de bienvenida para la experiencia VR.
 
-    - Si el código existe en la base de datos, devuelve sus datos.
-    - Si NO existe, responde como "Invitado" (HTTP 200, found=False).
-      El cliente VR decide si lo deja entrar o no.
+    Si el código está registrado devuelve sus datos; si no, responde como
+    'Invitado' (con ``found=False``) en lugar de error, para no bloquear el flujo.
+
+    Raises:
+        HTTPException: 400 si el código queda vacío; 500 ante fallos de MongoDB.
     """
     codigo_norm = normalizar_codigo(codigo)
     if not codigo_norm:
@@ -166,7 +128,6 @@ def lookup_student(codigo: str):
         raise HTTPException(status_code=500, detail=f"Error consultando estudiante: {e}")
 
     if doc is None:
-        # No existe: entra como invitado, sin curso preasignado.
         return StudentLookupResponse(
             found=False,
             codigo=codigo_norm,
@@ -191,7 +152,13 @@ def lookup_student(codigo: str):
 
 @app.post("/students", response_model=StudentResponse, status_code=201)
 def create_student(student: StudentCreate):
-    """Registra un estudiante nuevo. Endpoint administrativo."""
+    """Registra un estudiante tras validar y normalizar sus datos.
+
+    Raises:
+        HTTPException: 400 si el código, nombre o apellido quedan vacíos o el
+            curso no es '6' ni '7'; 409 si el código ya existe; 500 en otros
+            fallos de MongoDB.
+    """
     codigo_norm = normalizar_codigo(student.codigo)
     if not codigo_norm:
         raise HTTPException(status_code=400, detail="El código no puede estar vacío")
@@ -239,9 +206,14 @@ def create_student(student: StudentCreate):
 
 @app.get("/students", response_model=List[StudentResponse])
 def list_students(curso: Optional[str] = None, limit: int = 200):
-    """
-    Lista los estudiantes registrados. Endpoint administrativo.
-    Filtrable por curso ('6' o '7').
+    """Lista estudiantes ordenados por código, opcionalmente filtrados por curso.
+
+    Args:
+        curso: Si se indica, solo devuelve los estudiantes de ese curso ('6'/'7').
+        limit: Número máximo de estudiantes a devolver.
+
+    Raises:
+        HTTPException: 500 si falla la consulta a MongoDB.
     """
     try:
         query = {}
@@ -272,7 +244,11 @@ def list_students(curso: Optional[str] = None, limit: int = 200):
 
 @app.delete("/students/{codigo}", status_code=204)
 def delete_student(codigo: str):
-    """Borra un estudiante por su código. Endpoint administrativo."""
+    """Borra un estudiante por su código.
+
+    Raises:
+        HTTPException: 404 si el código no existe; 500 ante otros errores.
+    """
     codigo_norm = normalizar_codigo(codigo)
     try:
         result = students_collection.delete_one({"codigo": codigo_norm})

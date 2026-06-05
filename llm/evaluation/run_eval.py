@@ -1,19 +1,11 @@
-"""
-Evaluacion del servicio LLM de profundizacion (POST /ask).
+"""Banco de pruebas que evalúa las respuestas del servicio LLM contra un gold standard.
 
-Lee gold_standard.json con N preguntas. Para cada pregunta llama al endpoint
-n_runs veces y registra respuesta, latencia y checks automaticos de formato.
-
-Sin dependencias externas mas alla de requests (parte del venv del LLM).
-
-Salidas (en llm/evaluation/results/):
-  - llm_eval_runs.csv         -> una fila por (pregunta, run)
-  - llm_eval_per_question.csv -> resumen por pregunta
-  - llm_eval_run_meta.json    -> metadatos
-
-Uso (desde EduSign-Backend/llm/):
-    python evaluation/run_eval.py
-    python evaluation/run_eval.py --endpoint http://localhost:8000/ask
+Lanza cada pregunta de ``gold_standard.json`` varias veces contra el endpoint
+``/ask``, calcula métricas automáticas de formato (idioma, número de oraciones,
+saludos, preguntas de vuelta) y latencia, y vuelca los resultados a CSV/JSON en
+``results/``. Las columnas de evaluación humana (pertinencia, veracidad, etc.) se
+dejan vacías para completarse a mano. Se ejecuta con:
+``python run_eval.py [--endpoint URL] [--gold RUTA] [--out DIR]``.
 """
 
 import os
@@ -35,10 +27,12 @@ RESULTS_DIR = os.path.join(THIS_DIR, "results")
 
 
 def _mean(xs):
+    """Media aritmética de ``xs``, o 0.0 si la lista está vacía."""
     return statistics.fmean(xs) if xs else 0.0
 
 
 def _percentile(xs, q):
+    """Percentil ``q`` (0-100) de ``xs`` por interpolación lineal; 0.0 si está vacía."""
     if not xs:
         return 0.0
     s = sorted(xs)
@@ -65,6 +59,7 @@ GREETING_PREFIXES = (
 
 
 def normalize_text(s):
+    """Pasa a minúsculas y elimina tildes y la ñ para comparaciones robustas."""
     s = s.lower()
     for a, b in (("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ú", "u"), ("ñ", "n")):
         s = s.replace(a, b)
@@ -72,21 +67,25 @@ def normalize_text(s):
 
 
 def count_sentences(text):
+    """Cuenta oraciones no vacías separando por signos de puntuación finales."""
     parts = re.split(r"[.!?]+", text.strip())
     return len([p for p in parts if p.strip()])
 
 
 def starts_with_greeting(text):
+    """Indica si el texto empieza con un saludo (prohibido por el system prompt)."""
     t = normalize_text(text).lstrip()
     return any(t.startswith(g) for g in GREETING_PREFIXES)
 
 
 def ends_with_question(text):
+    """Indica si el texto termina en una pregunta (no debe devolver preguntas)."""
     t = text.strip()
     return bool(t) and (t.endswith("?") or t.endswith("¿"))
 
 
 def looks_spanish(text):
+    """Heurística de idioma: True si aparecen al menos 3 stopwords en español."""
     tokens = re.findall(r"[a-záéíóúñü]+", text.lower())
     if not tokens:
         return False
@@ -95,6 +94,13 @@ def looks_spanish(text):
 
 
 def evaluate_format(text):
+    """Calcula las métricas automáticas de formato de una respuesta del LLM.
+
+    Returns:
+        dict: Conteos (caracteres, palabras, oraciones) y banderas booleanas;
+            ``format_ok`` resume si cumple todas las reglas de estilo (español,
+            1-3 oraciones, sin saludo y sin pregunta final).
+    """
     n_sent = count_sentences(text)
     greet = starts_with_greeting(text)
     q_end = ends_with_question(text)
@@ -114,6 +120,16 @@ def evaluate_format(text):
 
 
 def call_llm(endpoint, prompt, character, model, temperature, max_tokens, timeout_s):
+    """Hace una llamada POST al endpoint ``/ask`` y normaliza el resultado.
+
+    Nunca lanza excepciones de red: ante un error las captura y las refleja en el
+    dict devuelto.
+
+    Returns:
+        dict: Con ``ok``, ``answer``, latencia reportada por el servidor
+            (``latency_server_ms``), latencia total medida en el cliente
+            (``latency_total_ms``), ``status_code`` y ``error``.
+    """
     payload = {
         "prompt": prompt,
         "character": character,
@@ -152,6 +168,7 @@ def call_llm(endpoint, prompt, character, model, temperature, max_tokens, timeou
 
 
 def main():
+    """Ejecuta la evaluación completa: lee el gold, llama al LLM y escribe resultados."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--endpoint", default=None)
     parser.add_argument("--gold", default=GOLD_PATH)
@@ -193,12 +210,11 @@ def main():
         qid = q["id"]
         character = q["character"]
         question = q["question"]
-        # Construir el prompt completo como en UE5 (prefix + pregunta + suffix)
         cp = character_prompts.get(character, {}) if character_prompts else {}
         prefix = cp.get("prefix", "")
         suffix = cp.get("suffix", "")
         full_prompt = f"{prefix}{question}{suffix}" if (prefix or suffix) else question
-        # En modo v2 no enviamos el campo character (la persona ya esta en el prompt)
+        # Modo v1: la persona viaja embebida en el prompt en lugar del campo character.
         api_character = character if send_character_field else None
         print(f"[{qid:12s}] {character:10s} | {question}")
         for run in range(1, n_runs + 1):

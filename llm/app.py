@@ -1,3 +1,11 @@
+"""Servicio HTTP que expone un LLM como narrador/personaje histórico para EduSign.
+
+Define una API FastAPI con dos endpoints: ``/health`` (sonda de estado) y ``/ask``,
+que reenvía la pregunta de un niño a un modelo de Hugging Face (vía el router con
+formato OpenAI) y devuelve una respuesta corta y simple en español. Requiere la
+variable de entorno ``HF_TOKEN``. Se ejecuta con: ``uvicorn app:app --reload``.
+"""
+
 import os
 import time
 import requests
@@ -19,6 +27,8 @@ app = FastAPI(title="EduSign LLM", version="1.0.0")
 
 
 class AskRequest(BaseModel):
+    """Cuerpo de la petición al endpoint ``/ask``."""
+
     prompt: str = Field(..., description="Pregunta del niño")
     character: str | None = Field(
         None,
@@ -29,16 +39,25 @@ class AskRequest(BaseModel):
 
 
 class AskResponse(BaseModel):
+    """Respuesta del endpoint ``/ask``: texto generado y latencia del servidor."""
+
     answer: str
     latency_ms: int
 
 
 @app.get("/health")
 def health():
+    """Comprueba que el servicio está vivo e indica el modelo configurado."""
     return {"ok": True, "model": MODEL_ID}
 
 
 def build_system_prompt(character: str | None) -> str:
+    """Construye el system prompt que fija persona, idioma y estilo apto para niños.
+
+    Args:
+        character: Personaje histórico a encarnar; si es ``None`` se usa un
+            narrador educativo neutro.
+    """
     persona = (
         f"Eres {character}, un personaje histórico, y hablas en primera persona."
         if character
@@ -56,6 +75,15 @@ def build_system_prompt(character: str | None) -> str:
 
 @app.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest):
+    """Responde la pregunta de un niño en boca de un personaje histórico.
+
+    Reenvía el prompt al LLM de Hugging Face y devuelve una respuesta breve en
+    español junto con la latencia medida en el servidor.
+
+    Raises:
+        HTTPException: 504 si el proveedor excede el timeout, el código de estado
+            del proveedor ante un error HTTP, o 500 para cualquier otro fallo.
+    """
     payload = {
         "model": MODEL_ID,
         "messages": [

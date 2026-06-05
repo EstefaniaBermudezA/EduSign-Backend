@@ -1,12 +1,10 @@
-"""
-Seed de estudiantes de ejemplo para la demo de tesis.
+"""Script de seed para poblar la colección de estudiantes de EduSign.
 
-Uso:
-    python -m students.seed_students            # inserta los de la lista
-    python -m students.seed_students --reset    # borra todo antes de insertar
-
-Para agregar estudiantes reales a mano, edita la lista ESTUDIANTES_DEMO
-y vuelve a correr el script (los que ya existen no se duplican).
+Inserta un conjunto fijo de estudiantes de demostración en MongoDB, saltando los
+códigos que ya existan. Se ejecuta desde la línea de comandos
+(``python seed_students.py``); con ``--reset`` borra antes todos los estudiantes.
+Requiere la variable de entorno ``MONGO_URI`` (más las opcionales ``MONGO_DB`` y
+``STUDENTS_COLLECTION``).
 """
 
 import argparse
@@ -19,15 +17,8 @@ from pymongo import ASCENDING, MongoClient
 from pymongo.errors import DuplicateKeyError
 from pymongo.server_api import ServerApi
 
-# Mismo .env que usa el servicio (students/.env)
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
-
-# ─────────────────────────────────────────────────────────────────────
-# EDITAR AQUÍ: lista de estudiantes que tendrán acceso a EduSign VR.
-# Códigos en formato libre, se normalizan a mayúsculas sin espacios.
-# Curso debe ser "6" o "7".
-# ─────────────────────────────────────────────────────────────────────
 ESTUDIANTES_DEMO = [
     {"codigo": "1", "nombre": "Sofia",       "apellido": "Martinez",  "curso": "6"},
     {"codigo": "2", "nombre": "Juan Camilo", "apellido": "Ruiz",      "curso": "6"},
@@ -39,7 +30,8 @@ ESTUDIANTES_DEMO = [
 
 
 def normalizar_codigo(codigo: str) -> str:
-    """Misma lógica que el servicio: numérico sin ceros a la izquierda."""
+    """Normaliza un código igual que el servicio: sin espacios, sin ceros a la
+    izquierda en numéricos y en mayúsculas los alfanuméricos."""
     limpio = "".join((codigo or "").split())
     if limpio.isdigit():
         return str(int(limpio))
@@ -47,6 +39,7 @@ def normalizar_codigo(codigo: str) -> str:
 
 
 def main():
+    """Parsea argumentos, conecta a MongoDB e inserta los estudiantes demo."""
     parser = argparse.ArgumentParser(description="Seed de estudiantes de EduSign")
     parser.add_argument(
         "--reset",

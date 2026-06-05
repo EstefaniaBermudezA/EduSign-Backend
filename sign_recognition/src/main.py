@@ -1,20 +1,10 @@
-"""
-Deteccion en tiempo real de senas LSC usando webcam.
+"""Detector de senas LSC en tiempo real desde la webcam (con visualizacion).
 
-Logica:
-1. Captura frames de la webcam con MediaPipe (manos + pose)
-2. Acumula landmarks en un buffer circular
-3. Monitorea la variancia de los landmarks de las manos:
-   - Variancia baja por 0.5s = persona termino la sena
-4. Toma la secuencia activa, la normaliza, aplica z-score, la pasa por la CNN
-5. Muestra el resultado en pantalla
-
-Uso:
-    python src/main.py
-    python src/main.py --threshold 0.0004 --camera 0
-
-Controles:
-    q / ESC : Salir
+Captura video, extrae landmarks de manos y hombros con MediaPipe y los acumula
+en un buffer. Cuando detecta que las manos se quedan quietas (variancia baja
+sostenida), clasifica la secuencia capturada con la SignCNN y muestra la sena
+reconocida junto con las probabilidades sobre el frame. Se ejecuta con:
+    python src/main.py [--camera 0] [--threshold ...] [--confidence ...]
 """
 
 import os
@@ -32,7 +22,6 @@ from mediapipe.tasks.python.core.base_options import BaseOptions
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from train_model import SignCNN, SEQ_LENGTH, NUM_FEATURES, normalize_sequence
 
-# ---------- Configuracion ----------
 VARIANCE_THRESHOLD = 0.0004
 STILLNESS_DURATION = 0.5
 MIN_ACTIVE_FRAMES = 15
@@ -43,7 +32,6 @@ COOLDOWN_SECONDS = 2.0
 LEFT_SHOULDER_IDX = 11
 RIGHT_SHOULDER_IDX = 12
 
-# ---------- Colores (BGR) ----------
 GREEN = (0, 200, 0)
 RED = (0, 0, 220)
 WHITE = (255, 255, 255)
@@ -52,7 +40,13 @@ BLACK = (0, 0, 0)
 
 
 def load_model(model_path):
-    """Carga el modelo CNN multi-clase y los parametros de normalizacion."""
+    """Carga el checkpoint de la SignCNN y sus metadatos de inferencia.
+
+    Returns:
+        Tupla (model en modo eval, idx_to_label, feat_mean, feat_std). Los dos
+        ultimos son los estadisticos z-score con que se normalizo el entreno y
+        son necesarios para clasificar coherentemente en produccion.
+    """
     checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
 
     num_classes = checkpoint.get('num_classes', 9)
@@ -78,6 +72,7 @@ def load_model(model_path):
 
 
 def create_hand_landmarker(model_path):
+    """Crea el detector de manos de MediaPipe en modo VIDEO (hasta 2 manos)."""
     options = vision.HandLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=model_path),
         running_mode=vision.RunningMode.VIDEO,
@@ -90,6 +85,7 @@ def create_hand_landmarker(model_path):
 
 
 def create_pose_landmarker(model_path):
+    """Crea el detector de pose de MediaPipe en modo VIDEO (1 persona)."""
     options = vision.PoseLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=model_path),
         running_mode=vision.RunningMode.VIDEO,
@@ -102,7 +98,12 @@ def create_pose_landmarker(model_path):
 
 
 def extract_landmarks(hand_result, pose_result):
-    """Extrae el vector de 132 features."""
+    """Construye el vector de 132 features de un frame (manos + hombros).
+
+    Replica el mismo encoding usado en el entrenamiento: coordenadas relativas
+    al centro de los hombros, layout mano izquierda (63) + derecha (63) +
+    hombros (6). Devuelve None si no hay pose (frame descartado).
+    """
     if not pose_result.pose_landmarks or len(pose_result.pose_landmarks) == 0:
         return None
 
@@ -110,6 +111,7 @@ def extract_landmarks(hand_result, pose_result):
     left_sh = pose_lms[LEFT_SHOULDER_IDX]
     right_sh = pose_lms[RIGHT_SHOULDER_IDX]
 
+    # Origen = centro de los hombros; hace la sena invariante a la posicion.
     origin = np.array([
         (left_sh.x + right_sh.x) / 2,
         (left_sh.y + right_sh.y) / 2,
@@ -119,6 +121,8 @@ def extract_landmarks(hand_result, pose_result):
     left_hand_lms = None
     right_hand_lms = None
 
+    # "Left"/"Right" de MediaPipe estan en vista de camara (espejados) respecto
+    # a las manos reales de la persona.
     if hand_result.hand_landmarks and hand_result.handedness:
         for i, handedness_list in enumerate(hand_result.handedness):
             label = handedness_list[0].category_name
@@ -128,6 +132,7 @@ def extract_landmarks(hand_result, pose_result):
                 left_hand_lms = hand_result.hand_landmarks[i]
 
     def hand_to_array(lms, num_points):
+        # Mano ausente -> ceros para conservar la dimension del vector.
         if lms is None:
             return np.zeros(num_points * 3)
         coords = []
@@ -147,7 +152,12 @@ def extract_landmarks(hand_result, pose_result):
 
 
 def compute_hand_variance(buffer, window=15):
-    """Calcula la variancia promedio de coordenadas de manos."""
+    """Variancia media del movimiento de manos en los ultimos `window` frames.
+
+    Se usa como detector de quietud: un valor bajo indica que las manos dejaron
+    de moverse, senal de que la sena termino. Solo considera los 126 features
+    de manos (ignora hombros). Devuelve inf si aun no hay suficientes frames.
+    """
     if len(buffer) < window:
         return float('inf')
     recent = np.array(list(buffer)[-window:])
@@ -156,13 +166,21 @@ def compute_hand_variance(buffer, window=15):
 
 
 def classify_sequence(model, sequence, idx_to_label, feat_mean, feat_std):
-    """Clasifica una secuencia aplicando z-score antes de la inferencia."""
+    """Clasifica una secuencia de frames capturada con la SignCNN.
+
+    Reinterpola la secuencia a SEQ_LENGTH, aplica la normalizacion z-score del
+    entrenamiento y ejecuta la red.
+
+    Returns:
+        Tupla (label, confidence, class_idx, probs) con la sena predicha, su
+        probabilidad softmax y el vector de probabilidades de todas las clases.
+    """
     normalized = normalize_sequence(np.array(sequence), SEQ_LENGTH)
 
-    # Aplicar z-score con los mismos parametros del entrenamiento
     if feat_mean is not None and feat_std is not None:
         normalized = (normalized - feat_mean) / feat_std
 
+    # unsqueeze(0) anade la dimension de batch; permute -> (batch, feat, seq).
     tensor = torch.tensor(normalized, dtype=torch.float32).unsqueeze(0)
     tensor = tensor.permute(0, 2, 1)
 
@@ -178,14 +196,12 @@ def classify_sequence(model, sequence, idx_to_label, feat_mean, feat_std):
 
 
 def draw_status(frame, text, color, confidence=None, variance=None, fps=None, probs=None, idx_to_label=None):
-    """Dibuja la informacion en el frame."""
+    """Dibuja sobre el frame el estado del detector, las barras de probabilidad y metricas (HUD)."""
     h, w = frame.shape[:2]
 
-    # Barra superior
     cv2.rectangle(frame, (0, 0), (w, 70), BLACK, -1)
     cv2.putText(frame, text, (15, 48), cv2.FONT_HERSHEY_SIMPLEX, 1.1, color, 3)
 
-    # Probabilidades por clase
     if probs is not None and idx_to_label is not None:
         bar_x = w - 200
         bar_y_start = 85
@@ -200,7 +216,6 @@ def draw_status(frame, text, color, confidence=None, variance=None, fps=None, pr
             cv2.putText(frame, f"{label}: {prob:.0%}", (bar_x + 2, y + 14),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, WHITE, 1)
 
-    # Pie de pagina
     info_parts = []
     if confidence is not None:
         info_parts.append(f"Conf: {confidence:.0%}")
@@ -217,6 +232,12 @@ def draw_status(frame, text, color, confidence=None, variance=None, fps=None, pr
 
 
 def main():
+    """Bucle principal del detector: captura, deteccion de quietud y clasificacion.
+
+    Implementa una maquina de estados sobre la variancia de manos: acumula
+    frames mientras hay movimiento y, cuando se detecta quietud sostenida (y no
+    se esta en cooldown), clasifica la sena, la muestra y reinicia el buffer.
+    """
     import argparse
     parser = argparse.ArgumentParser(description="Deteccion en tiempo real de senas LSC")
     parser.add_argument("--camera", type=int, default=0, help="Indice de la camara")
@@ -229,7 +250,6 @@ def main():
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     models_dir = os.path.join(project_root, "models")
 
-    # Cargar modelo CNN
     model_path = os.path.join(models_dir, "signs_cnn.pth")
     if not os.path.isfile(model_path):
         print(f"[ERROR] Modelo no encontrado: {model_path}")
@@ -237,11 +257,9 @@ def main():
         sys.exit(1)
     model, idx_to_label, feat_mean, feat_std = load_model(model_path)
 
-    # Cargar MediaPipe
     hand_landmarker = create_hand_landmarker(os.path.join(models_dir, "hand_landmarker.task"))
     pose_landmarker = create_pose_landmarker(os.path.join(models_dir, "pose_landmarker.task"))
 
-    # Webcam
     cap = cv2.VideoCapture(args.camera)
     if not cap.isOpened():
         print(f"[ERROR] No se pudo abrir la camara {args.camera}")
@@ -260,7 +278,6 @@ def main():
     print("Presiona 'q' o ESC para salir")
     print("=" * 50)
 
-    # Estado
     buffer = deque(maxlen=MAX_BUFFER_FRAMES)
     stillness_start = None
     last_detection_time = 0
@@ -308,6 +325,8 @@ def main():
                 stillness_duration = now - stillness_start
 
                 if stillness_duration >= STILLNESS_DURATION and not in_cooldown:
+                    # Descarta los ultimos 15 frames (la fase de quietud final)
+                    # para clasificar solo la parte activa de la sena.
                     active_frames = list(buffer)[:-15]
 
                     if len(active_frames) >= MIN_ACTIVE_FRAMES:

@@ -1,16 +1,9 @@
-"""
-Extraccion de caracteristicas de videos de senas usando MediaPipe Tasks API.
+"""Extrae los features de landmarks (manos + hombros) de videos de senas LSC.
 
-Extrae coordenadas normalizadas (x, y, z) de:
-  - Mano izquierda: 21 landmarks (63 valores)
-  - Mano derecha:   21 landmarks (63 valores)
-  - Hombros:        pose landmarks 11 y 12 (6 valores)
-
-Total por frame: 132 valores.
-Las coordenadas se normalizan respecto al punto medio entre hombros.
-
-Uso:
-    python src/extract_features.py
+Recorre los videos de una clase, ejecuta los detectores de MediaPipe (Hand
+Landmarker y Pose Landmarker) frame por frame y guarda la secuencia de
+landmarks de cada video como un archivo .npy que luego consume el
+entrenamiento. Se ejecuta por clase:
     python src/extract_features.py --videos_dir videos/Quien --output_dir data/features/Quien
 """
 
@@ -27,10 +20,11 @@ from mediapipe.tasks.python.core.base_options import BaseOptions
 LEFT_SHOULDER_IDX = 11
 RIGHT_SHOULDER_IDX = 12
 NUM_HAND_LANDMARKS = 21
-FEATURES_PER_FRAME = 132  # (21 + 21 + 2) * 3
+FEATURES_PER_FRAME = 132
 
 
 def create_hand_landmarker(model_path):
+    """Crea el detector de manos de MediaPipe en modo VIDEO (hasta 2 manos)."""
     options = vision.HandLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=model_path),
         running_mode=vision.RunningMode.VIDEO,
@@ -43,6 +37,7 @@ def create_hand_landmarker(model_path):
 
 
 def create_pose_landmarker(model_path):
+    """Crea el detector de pose de MediaPipe en modo VIDEO (1 persona)."""
     options = vision.PoseLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=model_path),
         running_mode=vision.RunningMode.VIDEO,
@@ -55,12 +50,21 @@ def create_pose_landmarker(model_path):
 
 
 def extract_landmarks_from_results(hand_result, pose_result):
-    """Construye vector de 132 valores a partir de los resultados de ambos modelos.
+    """Construye el vector de features de un frame a partir de manos y pose.
 
-    Retorna None si no se detectan hombros (pose).
-    Manos no detectadas se rellenan con ceros.
+    Toma el punto medio de los hombros como origen y expresa todas las
+    coordenadas de forma relativa a el, de modo que la sena sea invariante a
+    la posicion del cuerpo dentro del encuadre. El layout de los 132 features
+    es: mano izquierda (63), mano derecha (63) y hombros (6).
+
+    Args:
+        hand_result: Resultado del Hand Landmarker para el frame.
+        pose_result: Resultado del Pose Landmarker para el frame.
+
+    Returns:
+        np.ndarray de 132 features, o None si no se detecto pose (sin pose no
+        hay origen de referencia y el frame se descarta).
     """
-    # Necesitamos al menos la pose para los hombros
     if not pose_result.pose_landmarks or len(pose_result.pose_landmarks) == 0:
         return None
 
@@ -68,28 +72,28 @@ def extract_landmarks_from_results(hand_result, pose_result):
     left_sh = pose_lms[LEFT_SHOULDER_IDX]
     right_sh = pose_lms[RIGHT_SHOULDER_IDX]
 
-    # Origen: punto medio entre hombros
+    # Origen = centro de los hombros; ancla el sistema de coordenadas al torso.
     origin = np.array([
         (left_sh.x + right_sh.x) / 2,
         (left_sh.y + right_sh.y) / 2,
         (left_sh.z + right_sh.z) / 2,
     ])
 
-    # Clasificar manos por handedness (Left/Right)
     left_hand_lms = None
     right_hand_lms = None
 
+    # MediaPipe etiqueta la lateralidad desde la vista de la camara (espejada),
+    # por eso "Left" del detector corresponde a la mano derecha de la persona.
     if hand_result.hand_landmarks and hand_result.handedness:
         for i, handedness_list in enumerate(hand_result.handedness):
             label = handedness_list[0].category_name
-            # MediaPipe reporta "Left"/"Right" desde la perspectiva de la camara
-            # (espejado), asi que "Left" del modelo es la mano derecha del usuario
             if label == "Left":
                 right_hand_lms = hand_result.hand_landmarks[i]
             elif label == "Right":
                 left_hand_lms = hand_result.hand_landmarks[i]
 
     def hand_to_array(lms, num_points):
+        # Mano no detectada -> vector de ceros para mantener dimension constante.
         if lms is None:
             return np.zeros(num_points * 3)
         coords = []
@@ -109,7 +113,12 @@ def extract_landmarks_from_results(hand_result, pose_result):
 
 
 def process_video(video_path, hand_landmarker, pose_landmarker):
-    """Procesa un video y retorna array (N, 132)."""
+    """Procesa un video completo y devuelve su secuencia de features.
+
+    Returns:
+        np.ndarray de forma (n_frames_con_landmarks, 132), o None si el video
+        no se pudo abrir o no se detectaron landmarks en ningun frame.
+    """
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         print(f"  [ERROR] No se pudo abrir: {video_path}")
@@ -131,11 +140,9 @@ def process_video(video_path, hand_landmarker, pose_landmarker):
         frames_read += 1
         timestamp_ms = int(cap.get(cv2.CAP_PROP_POS_MSEC))
 
-        # Convertir a formato MediaPipe Image
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
 
-        # Detectar manos y pose
         hand_result = hand_landmarker.detect_for_video(mp_image, timestamp_ms)
         pose_result = pose_landmarker.detect_for_video(mp_image, timestamp_ms)
 
@@ -158,6 +165,7 @@ def process_video(video_path, hand_landmarker, pose_landmarker):
 
 
 def main():
+    """Procesa todos los videos de la carpeta de entrada y guarda un .npy por video."""
     parser = argparse.ArgumentParser(
         description="Extrae landmarks de manos y hombros de videos de senas (LSC)")
     parser.add_argument("--videos_dir", default="videos/Quien",
@@ -208,7 +216,6 @@ def main():
 
         print(f"\n[{i}/{len(video_files)}] Procesando: {video_file}")
 
-        # Crear instancias frescas por video para evitar problemas de timestamp
         hand_landmarker = create_hand_landmarker(hand_model)
         pose_landmarker = create_pose_landmarker(pose_model)
 
@@ -226,7 +233,6 @@ def main():
             hand_landmarker.close()
             pose_landmarker.close()
 
-    # Resumen final
     print("\n" + "=" * 60)
     print("RESUMEN DE EXTRACCION")
     print("=" * 60)

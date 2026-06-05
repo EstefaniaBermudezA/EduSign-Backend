@@ -1,16 +1,10 @@
-"""
-EduSign Notes Backend
----------------------
-Servicio independiente para guardar y consultar notas que los niños
-generan al usar el módulo de aprendizaje en VR.
+"""Microservicio REST de notas de EduSign.
 
-Endpoints:
-- GET    /health          → status del servicio + Mongo
-- POST   /notes           → guarda una nota nueva
-- GET    /notes           → lista las notas (filtrable por user_id)
-- DELETE /notes/{note_id} → borra una nota por id
-
-Corre en puerto 8001 por defecto (el LLM corre en 8000).
+Expone una API FastAPI para crear, listar y borrar las notas que los niños
+guardan a partir de las respuestas del LLM dentro de la experiencia VR. Las
+notas se persisten en MongoDB. Se ejecuta con un servidor ASGI, p. ej.
+``uvicorn notes.app:app --reload``, y requiere la variable de entorno
+``MONGO_URI`` (más las opcionales ``MONGO_DB`` y ``NOTES_COLLECTION``).
 """
 
 import os
@@ -27,9 +21,6 @@ from bson import ObjectId
 
 load_dotenv()
 
-# =============================================
-# Config
-# =============================================
 MONGO_URI = os.getenv("MONGO_URI", "")
 MONGO_DB = os.getenv("MONGO_DB", "edusign")
 NOTES_COLLECTION = os.getenv("NOTES_COLLECTION", "notes")
@@ -37,14 +28,10 @@ NOTES_COLLECTION = os.getenv("NOTES_COLLECTION", "notes")
 if not MONGO_URI:
     raise RuntimeError("Falta MONGO_URI en variables de entorno.")
 
-# Mongo client (Stable API v1)
 mongo_client = MongoClient(MONGO_URI, server_api=ServerApi("1"))
 db = mongo_client[MONGO_DB]
 notes_collection = db[NOTES_COLLECTION]
 
-# =============================================
-# App
-# =============================================
 app = FastAPI(title="EduSign Notes Backend", version="1.0.0")
 
 app.add_middleware(
@@ -55,11 +42,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# =============================================
-# Models
-# =============================================
 class NoteCreate(BaseModel):
+    """Cuerpo de la petición para crear una nota."""
+
     sign: str = Field(..., description="Seña que disparó la nota (Nilo, Quien, Piramides...)")
     question: str = Field(..., description="Pregunta hecha al LLM")
     answer: str = Field(..., description="Respuesta del LLM que el niño quiere guardar")
@@ -68,6 +53,8 @@ class NoteCreate(BaseModel):
 
 
 class NoteResponse(BaseModel):
+    """Representación de una nota tal como se devuelve al cliente."""
+
     id: str
     sign: str
     question: str
@@ -78,19 +65,13 @@ class NoteResponse(BaseModel):
 
 
 class NotesListResponse(BaseModel):
-    """
-    Envuelve la lista en un objeto para que clientes con parsers JSON
-    que solo aceptan object-root (como UE5 JsonBlueprintUtilities) puedan leerla.
-    """
+    """Envoltura con la lista de notas devueltas por el listado."""
+
     notes: List[NoteResponse]
 
-
-# =============================================
-# Endpoints
-# =============================================
 @app.get("/health")
 def health():
-    """Health check del servicio y conectividad con Mongo."""
+    """Comprueba el estado del servicio y la conectividad con MongoDB."""
     try:
         mongo_client.admin.command("ping")
         mongo_ok = True
@@ -107,7 +88,11 @@ def health():
 
 @app.post("/notes", response_model=NoteResponse, status_code=201)
 def create_note(note: NoteCreate):
-    """Guarda una nota en MongoDB."""
+    """Guarda una nueva nota y la devuelve con su id y fecha de creación.
+
+    Raises:
+        HTTPException: 500 si falla la inserción en MongoDB.
+    """
     try:
         doc = note.model_dump()
         doc["created_at"] = datetime.now(timezone.utc)
@@ -127,13 +112,14 @@ def create_note(note: NoteCreate):
 
 @app.get("/notes", response_model=NotesListResponse)
 def list_notes(user_id: Optional[str] = None, limit: int = 50):
-    """
-    Lista las notas. Si se pasa user_id, filtra por ese usuario.
-    Ordenadas de la más nueva a la más vieja.
+    """Lista las notas más recientes, opcionalmente filtradas por usuario.
 
-    Devuelve un objeto {"notes": [...]} (envuelto en object) en lugar del
-    array crudo, para compatibilidad con parsers JSON que requieren
-    object-root (UE5 JsonBlueprintUtilities).
+    Args:
+        user_id: Si se indica, solo devuelve las notas de ese niño.
+        limit: Número máximo de notas a devolver (ordenadas de la más reciente).
+
+    Raises:
+        HTTPException: 500 si falla la consulta a MongoDB.
     """
     try:
         query = {}
@@ -160,7 +146,11 @@ def list_notes(user_id: Optional[str] = None, limit: int = 50):
 
 @app.delete("/notes/{note_id}", status_code=204)
 def delete_note(note_id: str):
-    """Borra una nota por su id."""
+    """Borra una nota por su id.
+
+    Raises:
+        HTTPException: 404 si la nota no existe; 500 ante otros errores.
+    """
     try:
         result = notes_collection.delete_one({"_id": ObjectId(note_id)})
         if result.deleted_count == 0:

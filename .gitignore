@@ -244,3 +244,7 @@ sign_recognition/models/*.task
 
 # Entorno virtual con typo accidental (debería llamarse .venv)
 .ven/
+
+# Archivos comprimidos pesados (p.ej. exports del proyecto UE5).
+# No deben ir al repo: distribuir vía GitHub Releases o almacenamiento externo.
+*.zip
