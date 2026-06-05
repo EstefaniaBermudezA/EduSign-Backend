@@ -1,0 +1,64 @@
+{
+  "config": {
+    "n_splits": 5,
+    "seeds": [
+      42,
+      123,
+      2025
+    ],
+    "max_epochs": 300,
+    "early_stop_patience": 50,
+    "seq_length": 60,
+    "num_features": 132,
+    "batch_size": 32,
+    "learning_rate": 0.0005,
+    "weight_decay": 0.0001,
+    "latency_warmup": 50,
+    "latency_runs": 200
+  },
+  "results": {
+    "CNN_1D": {
+      "model": "CNN_1D",
+      "num_parameters": 178697,
+      "accuracy_mean": 83.45679012345678,
+      "accuracy_std": 10.416250236630079,
+      "f1_macro_mean": 82.57142857142858,
+      "f1_macro_std": 10.796633982246266,
+      "latency_ms": {
+        "mean_ms": 0.37968679690361024,
+        "p50_ms": 0.3290499746799469,
+        "p95_ms": 0.4825899869203565,
+        "p99_ms": 0.7664780098199836
+      }
+    },
+    "MLP_flat": {
+      "num_parameters": 176491,
+      "accuracy_mean": 64.07407407407408,
+      "accuracy_std": 13.165462926542112,
+      "f1_macro_mean": 61.431510875955304,
+      "f1_macro_std": 13.981721798474597,
+      "latency_ms": {
+        "mean_ms": 0.07345700025325641,
+        "p50_ms": 0.07310003275051713,
+        "p95_ms": 0.0798399676568806,
+        "p99_ms": 0.0990439945599061
+      },
+      "elapsed_seconds": 52.7
+    },
+    "MLP_pooled": {
+      "num_parameters": 26249,
+      "accuracy_mean": 63.33333333333333,
+      "accuracy_std": 12.738033427135798,
+      "f1_macro_mean": 60.93533215755437,
+      "f1_macro_std": 13.003235308189343,
+      "latency_ms": {
+        "mean_ms": 0.06789599952753633,
+        "p50_ms": 0.07070001447573304,
+        "p95_ms": 0.07480499043595046,
+        "p99_ms": 0.08899097738321844
+      },
+      "elapsed_seconds": 68.5
+    }
+  },
+  "total_elapsed_seconds": 121.3
+}

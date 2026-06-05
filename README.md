@@ -6,10 +6,17 @@
 
 Este repositorio contiene los servicios backend del sistema **EduSign**, una plataforma educativa de realidad virtual orientada a la enseñanza de historia para niños sordos que cursan entre sexto y séptimo grado, mediante el uso de la Lengua de Señas Colombiana (LSC).
 
-El backend se compone de dos módulos independientes que se integran con el cliente de realidad virtual desarrollado en Unreal Engine 5:
+El backend es un monolito modular: cada módulo es independiente, tiene su propio `requirements.txt` y se ejecuta por separado. Todos se integran con el cliente de realidad virtual desarrollado en Unreal Engine 5.
 
-1. **`sign_recognition/`**: sistema de reconocimiento de señas en tiempo real basado en visión por computadora y aprendizaje profundo.
-2. **`llm/`**: servicio de procesamiento de lenguaje natural basado en modelos de lenguaje (LLM) para enriquecer la interacción educativa.
+| Módulo | Rol | Puerto |
+|--------|-----|--------|
+| [`sign_recognition/`](sign_recognition/) | Reconocimiento de señas LSC en tiempo real (CNN 1D + MediaPipe). Sirve detecciones por WebSocket. | 8765 (ws) |
+| [`llm/`](llm/) | Servicio de lenguaje (FastAPI) que enriquece la interacción educativa vía LLM. | 8000 |
+| [`notes/`](notes/) | Guarda y consulta las notas que los niños generan a partir de las respuestas del LLM (FastAPI + MongoDB). | 8001 |
+| [`students/`](students/) | Padrón de estudiantes para la pantalla de bienvenida del cliente UE5 (FastAPI + MongoDB). | 8002 |
+| [`telemetry/`](telemetry/) | Analiza los CSV de telemetría que genera UE5 y produce las figuras de la tesis. | — (script) |
+
+Cada módulo tiene su propio `README.md` con detalle de endpoints, variables de entorno y uso.
 
 
 ## Estructura del proyecto
@@ -22,19 +29,36 @@ EduSign-Backend/
 │   │   ├── sign_server.py         # Servidor WebSocket para integración con UE5
 │   │   ├── train_model.py         # Entrenamiento de la CNN 1D
 │   │   └── extract_features.py    # Extracción de landmarks desde videos
+│   ├── evaluation/                # Suite de evaluación del modelo (ver sección "Evaluación")
+│   │   ├── kfold_evaluation.py    # Validación cruzada 5-fold × 3 seeds, sin leakage
+│   │   ├── ablation_study.py      # Ablación: augmentation / z-score / class weights
+│   │   ├── baseline_mlp.py        # Líneas base MLP vs. la CNN 1D
+│   │   ├── latency_benchmark.py   # Benchmark de latencia en CPU (RNF de tiempo)
+│   │   ├── evaluate_model.py      # Evaluación holdout (con sesgo por leakage, ver nota)
+│   │   └── results/               # CSV / JSON / PNG generados por los scripts
 │   ├── models/
 │   │   └── signs_cnn.pth          # Modelo CNN entrenado
 │   └── requirements.txt
 │
 ├── llm/                           # Módulo de procesamiento de lenguaje
 │   ├── app.py                     # API REST (FastAPI)
+│   ├── evaluation/                # Evaluación del LLM (gold standard + resultados)
 │   ├── requirements.txt
 │   └── .env.example               # Plantilla de variables de entorno
+│
+├── notes/                         # Notas de los estudiantes (FastAPI + MongoDB)
+├── students/                      # Padrón de estudiantes (FastAPI + MongoDB)
+├── telemetry/                     # Análisis de telemetría UE5 → figuras de tesis
+│   └── figures/                   # Figuras y resúmenes generados
 │
 ├── .gitignore
 ├── LICENSE
 └── README.md
 ```
+
+> Nota: las carpetas de cada módulo no rastreadas por git (`.venv/`, `data/`,
+> `videos/`, `docs/`, modelos `*.task`) se describen en `.gitignore`. El modelo
+> entrenado `signs_cnn.pth` sí se versiona.
 
 ## Tecnologías
 
@@ -193,6 +217,38 @@ El vocabulario actual contempla, entre otras, señas asociadas a contenidos hist
 6. Aplicación de normalización z-score a la secuencia activa.
 7. Clasificación mediante una red neuronal convolucional 1D entrenada con augmentation.
 8. Visualización del resultado en pantalla.
+
+## Evaluación del modelo de señas
+
+La suite de evaluación vive en [`sign_recognition/evaluation/`](sign_recognition/evaluation/).
+Todos los scripts se ejecutan desde la carpeta `sign_recognition/` con el entorno
+virtual activo y escriben sus salidas en `evaluation/results/`.
+
+| Script | Qué hace | Métrica principal |
+|--------|----------|-------------------|
+| `kfold_evaluation.py` | Validación cruzada estratificada 5-fold × 3 seeds, **sin data leakage** (augmentation y z-score calculados solo sobre el train de cada fold). | **Accuracy 83.46 % ± 10.42 %** · F1 macro 82.57 % |
+| `ablation_study.py` | Mide el aporte de augmentation, z-score y class weights desactivándolos uno a uno. | Δ accuracy / F1 vs. configuración completa |
+| `baseline_mlp.py` | Compara la CNN 1D contra dos MLP (aplanado y mean-pooling) bajo el mismo protocolo. | CNN 1D vs. MLP_flat vs. MLP_pooled |
+| `latency_benchmark.py` | Latencia de inferencia en CPU (p50/p95/p99) y verificación del RNF de < 2000 ms. | Latencia pipeline (batch=1) |
+| `evaluate_model.py` | Evaluación holdout que reproduce el split de `train_model.py`. | Accuracy 96.67 % ⚠️ |
+
+```bash
+cd sign_recognition
+python evaluation/kfold_evaluation.py     # evaluación de referencia (sin leakage)
+python evaluation/ablation_study.py
+python evaluation/baseline_mlp.py
+python evaluation/latency_benchmark.py
+```
+
+> ⚠️ **Cuál métrica reportar.** `evaluate_model.py` reproduce el split original de
+> `train_model.py`, que aumenta los datos y calcula el z-score sobre *todo* el
+> dataset **antes** de separar train/val. Eso filtra información de validación
+> (copias aumentadas de un mismo gesto caen en ambos lados) e infla la accuracy a
+> ~96.7 %. La cifra metodológicamente correcta es la de `kfold_evaluation.py`:
+> **83.46 % ± 10.42 %**. Se recomienda reportar esta última.
+
+El módulo `llm/` tiene su propia evaluación en [`llm/evaluation/`](llm/evaluation/)
+(gold standard de preguntas/respuestas y resultados en `llm/evaluation/results/`).
 
 ## Licencia
 

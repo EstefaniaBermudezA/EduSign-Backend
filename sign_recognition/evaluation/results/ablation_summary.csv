@@ -1,0 +1,5 @@
+variant,accuracy_mean,accuracy_std,f1_macro_mean,f1_macro_std,delta_accuracy_vs_full,delta_f1_vs_full,elapsed_seconds
+full,83.46,10.42,82.54,10.80,+0.00,+0.00,537.9
+no_augment,54.57,14.39,51.56,14.73,-28.89,-30.99,98.1
+no_zscore,78.77,16.65,77.87,17.23,-4.69,-4.68,609.1
+no_class_w,84.20,10.66,83.26,11.09,+0.74,+0.71,573.7

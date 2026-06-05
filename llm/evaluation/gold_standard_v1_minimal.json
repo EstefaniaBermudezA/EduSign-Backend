@@ -1,0 +1,186 @@
+{
+  "_description": "Gold standard para evaluar el servicio LLM de profundizacion de EduSign. Una entrada por sena con el personaje asociado a la epoca, los hechos verificables que la respuesta deberia respetar (extraidos de fuentes pedagogicas y curriculares de 6o y 7o de bachillerato) y las afirmaciones que serian consideradas alucinaciones. La columna 'expected_persona_self_reference' indica si la respuesta debe declarar la identidad o la epoca del personaje (caso especifico de la sena Quien).",
+  "config": {
+    "endpoint_default": "http://localhost:8000/ask",
+    "model_default": "Qwen/Qwen2.5-7B-Instruct",
+    "temperature_default": 0.3,
+    "max_tokens_default": 150,
+    "n_runs_per_question": 3,
+    "format_rules": [
+      "Idioma: espanol",
+      "Maximo de 3 oraciones",
+      "No iniciar con saludos del tipo 'Hola', 'Buenas'",
+      "No terminar con preguntas dirigidas al usuario"
+    ]
+  },
+  "questions": [
+    {
+      "id": "ariete",
+      "sign": "Ariete",
+      "character": "Sir Magnus",
+      "epoch": "Edad Media",
+      "question": "¿Que es un ariete y para que se usaba en la Edad Media?",
+      "expected_facts": [
+        "Era un arma de asedio empleada para atacar fortificaciones.",
+        "Estaba hecho de un tronco grueso de madera, con frecuencia con el extremo reforzado en metal o tallado como cabeza de carnero.",
+        "Se usaba para romper puertas o muros de castillos golpeandolos repetidamente, operado por varios soldados, en ocasiones bajo un techo movil que los protegia."
+      ],
+      "hallucination_flags": [
+        "Mencionar polvora, armas de fuego o explosivos.",
+        "Describirlo como arma personal de combate cuerpo a cuerpo (espada, hacha o lanza).",
+        "Atribuirle uso ceremonial, religioso o decorativo.",
+        "Ubicarlo fuera del periodo medieval."
+      ],
+      "expected_persona_self_reference": false
+    },
+    {
+      "id": "cazar",
+      "sign": "Cazar",
+      "character": "Tarak",
+      "epoch": "Prehistoria",
+      "question": "¿Como cazaban los humanos en la prehistoria?",
+      "expected_facts": [
+        "Cazaban en grupo, coordinando movimientos para emboscar o perseguir a la presa.",
+        "Usaban armas de piedra y madera como lanzas, hachas, flechas y trampas simples.",
+        "Sus presas frecuentes incluian animales grandes como mamuts, bisontes, ciervos o caballos salvajes, segun la region."
+      ],
+      "hallucination_flags": [
+        "Mencionar armas de fuego, redes industriales o vehiculos.",
+        "Describir la caza como actividad individual o de subsistencia trivial.",
+        "Atribuir conocimientos de domesticacion ganadera (era posterior).",
+        "Inventar nombres de pueblos prehistoricos especificos."
+      ],
+      "expected_persona_self_reference": false
+    },
+    {
+      "id": "cueva",
+      "sign": "Cueva",
+      "character": "Tarak",
+      "epoch": "Prehistoria",
+      "question": "¿Por que los humanos prehistoricos vivian en cuevas?",
+      "expected_facts": [
+        "Las cuevas ofrecian proteccion natural contra el clima (lluvia, frio, viento) y los depredadores.",
+        "Permitian conservar el fuego encendido y mantener un espacio comun para descansar y cocinar.",
+        "Algunas cuevas guardan pinturas rupestres que muestran su uso tambien como espacio simbolico y de comunicacion."
+      ],
+      "hallucination_flags": [
+        "Afirmar que vivian permanentemente en cuevas sin desplazarse (eran semi-nomadas).",
+        "Describir construcciones internas complejas como habitaciones cerradas o muebles.",
+        "Mencionar uso de electricidad, ventanas o cerraduras."
+      ],
+      "expected_persona_self_reference": false
+    },
+    {
+      "id": "feudo",
+      "sign": "Feudo",
+      "character": "Sir Magnus",
+      "epoch": "Edad Media",
+      "question": "¿Que era un feudo en la Edad Media?",
+      "expected_facts": [
+        "Era un territorio entregado por un rey o senor mayor a un noble (vasallo) a cambio de lealtad y servicio militar.",
+        "Estaba formado por tierras de cultivo, aldeas, bosques y a menudo un castillo o casa fuerte.",
+        "Los campesinos trabajaban la tierra del senor feudal y le entregaban parte de la cosecha a cambio de proteccion."
+      ],
+      "hallucination_flags": [
+        "Describirlo como un sistema democratico o electivo.",
+        "Confundirlo con una ciudad-estado independiente o un reino completo.",
+        "Atribuirle moneda propia o leyes desligadas de las del reino.",
+        "Ubicarlo fuera del periodo medieval."
+      ],
+      "expected_persona_self_reference": false
+    },
+    {
+      "id": "fuego",
+      "sign": "Fuego",
+      "character": "Tarak",
+      "epoch": "Prehistoria",
+      "question": "¿Como descubrio el ser humano el uso del fuego?",
+      "expected_facts": [
+        "Probablemente lo conocieron primero por incendios naturales provocados por rayos o por lava.",
+        "Aprendieron a mantenerlo, alimentandolo con ramas secas, y mas tarde a producirlo mediante friccion o golpeando piedras.",
+        "Lo usaron para cocinar, calentarse, iluminar las cuevas y ahuyentar animales peligrosos."
+      ],
+      "hallucination_flags": [
+        "Dar una fecha exacta o un nombre de descubridor (no se conoce).",
+        "Atribuirlo a una sola persona o evento puntual.",
+        "Confundirlo con la invencion de la electricidad o de los fosforos.",
+        "Mencionar combustibles modernos (gasolina, gas)."
+      ],
+      "expected_persona_self_reference": false
+    },
+    {
+      "id": "guerra",
+      "sign": "Guerra",
+      "character": "Sir Magnus",
+      "epoch": "Edad Media",
+      "question": "¿Como eran las guerras en la Edad Media?",
+      "expected_facts": [
+        "Combatian principalmente con espadas, lanzas, arcos, ballestas y armaduras, a pie o a caballo.",
+        "Eran frecuentes los asedios a castillos, en los que se usaban arietes, catapultas o torres de asalto.",
+        "Sus causas tipicas incluian disputas por territorios, sucesiones al trono o motivos religiosos como las Cruzadas."
+      ],
+      "hallucination_flags": [
+        "Mencionar armas de fuego avanzadas, artilleria moderna, tanques o aviones.",
+        "Describir tacticas o tecnologias modernas (radio, gps).",
+        "Atribuir motivos exclusivos modernos (ideologias contemporaneas).",
+        "Confundir el periodo medieval con la Antiguedad o la Edad Moderna."
+      ],
+      "expected_persona_self_reference": false
+    },
+    {
+      "id": "nilo",
+      "sign": "Nilo",
+      "character": "Anubis",
+      "epoch": "Antiguo Egipto",
+      "question": "¿Por que fue importante el rio Nilo para los egipcios?",
+      "expected_facts": [
+        "Era la principal fuente de agua dulce y de vida en una region rodeada de desierto.",
+        "Sus inundaciones anuales depositaban un limo fertil que permitia cultivar trigo, cebada y otros alimentos.",
+        "Servia como ruta principal de transporte y comercio, comunicando el Alto y el Bajo Egipto."
+      ],
+      "hallucination_flags": [
+        "Datos geograficos incorrectos (por ejemplo afirmar que desemboca en el Atlantico).",
+        "Atribuirle funciones modernas no relevantes en la antiguedad (energia hidroelectrica industrial).",
+        "Confundirlo con otro rio (Tigris, Eufrates, Amazonas)."
+      ],
+      "expected_persona_self_reference": false
+    },
+    {
+      "id": "piramides",
+      "sign": "Piramides",
+      "character": "Anubis",
+      "epoch": "Antiguo Egipto",
+      "question": "¿Como se construyeron las piramides de Egipto?",
+      "expected_facts": [
+        "Fueron levantadas como tumbas reales para los faraones, principalmente durante el Imperio Antiguo (alrededor de 2500 a.C.).",
+        "Se construyeron con grandes bloques de piedra caliza y granito, transportados con trineos, rampas y rodillos.",
+        "Participaron miles de trabajadores organizados en equipos, incluyendo artesanos especializados, no unicamente esclavos."
+      ],
+      "hallucination_flags": [
+        "Atribuir la construccion a extraterrestres o a civilizaciones perdidas.",
+        "Afirmar que se hicieron de hormigon, ladrillos modernos o acero.",
+        "Describirlas exclusivamente como templos, observatorios astronomicos o palacios habitados.",
+        "Ubicarlas fuera del Antiguo Egipto."
+      ],
+      "expected_persona_self_reference": false
+    },
+    {
+      "id": "quien",
+      "sign": "Quien",
+      "character": "Tarak",
+      "epoch": "Prehistoria",
+      "question": "¿Quien eres y de que epoca vienes?",
+      "expected_facts": [
+        "Debe declarar su identidad como Tarak (o reconocerse como el personaje activo).",
+        "Debe ubicarse en la Prehistoria.",
+        "La respuesta debe estar en primera persona."
+      ],
+      "hallucination_flags": [
+        "Decir que es Anubis o Magnus.",
+        "Ubicarse en una epoca distinta a la Prehistoria.",
+        "Responder en tercera persona o como narrador externo."
+      ],
+      "expected_persona_self_reference": true
+    }
+  ]
+}

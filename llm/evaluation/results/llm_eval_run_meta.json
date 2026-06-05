@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-06-03T23:30:21.570143",
+  "endpoint": "http://localhost:8000/ask",
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "temperature": 0.6,
+  "max_tokens": 200,
+  "n_runs_per_question": 3,
+  "total_questions": 9,
+  "total_calls": 26,
+  "elapsed_seconds": 81.5
+}

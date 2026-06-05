@@ -1,0 +1,4 @@
+model,num_parameters,accuracy_mean,accuracy_std,f1_macro_mean,f1_macro_std,latency_mean_ms,latency_p99_ms
+CNN_1D,178697,83.46,10.42,82.57,10.80,0.380,0.766
+MLP_flat,176491,64.07,13.17,61.43,13.98,0.073,0.099
+MLP_pooled,26249,63.33,12.74,60.94,13.00,0.068,0.089
